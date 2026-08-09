@@ -2,8 +2,9 @@ from django.urls import path
 from .views import (
     SessionListCreateView, SessionCloseView,
     ChallengeRequestView, CheckInView,
-    SessionRecordsView, StudentAttendanceHistoryView,
-    ActiveSessionsForStudentView, DashboardView,
+    SessionRecordsView, ManualAttendanceOverrideView,
+    StudentAttendanceHistoryView, ActiveSessionsForStudentView,
+    DashboardView,
 )
 
 urlpatterns = [
@@ -13,6 +14,7 @@ urlpatterns = [
     path('sessions/<int:session_id>/challenge/', ChallengeRequestView.as_view(), name='challenge-request'),
     path('sessions/<int:session_id>/check-in/', CheckInView.as_view(), name='check-in'),
     path('sessions/<int:pk>/records/', SessionRecordsView.as_view(), name='session-records'),
+    path('sessions/<int:pk>/manual-mark/', ManualAttendanceOverrideView.as_view(), name='manual-mark'),
     path('student/history/', StudentAttendanceHistoryView.as_view(), name='student-history'),
     path('student/active-sessions/', ActiveSessionsForStudentView.as_view(), name='active-sessions'),
 ]

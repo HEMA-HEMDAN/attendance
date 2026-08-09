@@ -10,9 +10,7 @@ class LocationListCreateView(generics.ListCreateAPIView):
     search_fields = ['name']
 
     def get_permissions(self):
-        if self.request.method == 'GET':
-            return [IsAdminOrTeacher()]
-        return [IsOrganizationAdmin()]
+        return [IsAdminOrTeacher()]
 
     def get_queryset(self):
         return AttendanceLocation.objects.filter(

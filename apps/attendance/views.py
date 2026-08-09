@@ -199,6 +199,71 @@ class SessionRecordsView(generics.ListAPIView):
         ).select_related('student__user').order_by('verified_at')
 
 
+class ManualAttendanceOverrideView(APIView):
+    """
+    Teacher/Admin manually marks or overrides attendance for a student in a session.
+    """
+    permission_classes = [IsAdminOrTeacher]
+
+    def post(self, request, pk):
+        student_id = request.data.get('student_id')
+        status_val = request.data.get('status', 'PRESENT')
+
+        if not student_id:
+            return Response({'detail': 'student_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if status_val not in ['PRESENT', 'LATE', 'EXCUSED']:
+            return Response({'detail': 'Invalid status. Must be PRESENT, LATE, or EXCUSED'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            session = AttendanceSession.objects.get(
+                pk=pk,
+                organization=request.user.organization,
+            )
+        except AttendanceSession.DoesNotExist:
+            return Response({'detail': 'Attendance session not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        from apps.students.models import Student
+        try:
+            student = Student.objects.get(
+                pk=student_id,
+                organization=request.user.organization,
+            )
+        except Student.DoesNotExist:
+            return Response({'detail': 'Student not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        record, created = AttendanceRecord.objects.update_or_create(
+            session=session,
+            student=student,
+            defaults={
+                'status': status_val,
+                'verified_at': timezone.now(),
+            }
+        )
+
+        audit(
+            action=AuditAction.ATTENDANCE_ACCEPTED,
+            actor=request.user,
+            organization=request.user.organization,
+            target_type='AttendanceRecord',
+            target_id=record.id,
+            metadata={
+                'manual_override': True,
+                'session_id': session.id,
+                'student_id': student.student_id,
+                'status': status_val,
+            },
+        )
+
+        from .signals import broadcast_attendance_record
+        broadcast_attendance_record(record)
+
+        return Response(
+            AttendanceRecordSerializer(record).data,
+            status=status.HTTP_200_OK if not created else status.HTTP_201_CREATED
+        )
+
+
 class StudentAttendanceHistoryView(generics.ListAPIView):
     """Student views their own attendance history."""
     permission_classes = [IsStudent]

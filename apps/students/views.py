@@ -4,7 +4,7 @@ from rest_framework import generics, filters, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.permissions import IsOrganizationAdmin, IsStudent
+from apps.accounts.permissions import IsOrganizationAdmin, IsStudent, IsAdminOrTeacher
 from apps.audit.service import audit
 from apps.audit.models import AuditAction
 
@@ -18,9 +18,13 @@ def _get_student_response(student):
 
 
 class StudentListCreateView(generics.ListCreateAPIView):
-    permission_classes = [IsOrganizationAdmin]
     filter_backends = [filters.SearchFilter]
     search_fields = ['student_id', 'user__first_name', 'user__last_name', 'user__email']
+
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [IsAdminOrTeacher()]
+        return [IsOrganizationAdmin()]
 
     def get_serializer_class(self):
         if self.request.method == 'POST':

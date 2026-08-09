@@ -250,3 +250,21 @@ class TestHaversine:
         from apps.locations.utils import haversine_distance
         d = haversine_distance(24.7136, 46.6753, 24.7136, 46.6753)
         assert d == 0.0
+
+
+@pytest.mark.django_db
+class TestTeacherLocationCreation:
+    def test_teacher_can_create_location(self):
+        teacher_user = TeacherUserFactory()
+        client = APIClient()
+        client.force_authenticate(user=teacher_user)
+
+        res = client.post('/api/v1/locations/', {
+            'name': 'Science Lab 101',
+            'latitude': 30.0444,
+            'longitude': 31.2357,
+            'radius_meters': 150,
+        })
+        assert res.status_code == 201
+        assert res.data['name'] == 'Science Lab 101'
+        assert float(res.data['latitude']) == 30.0444

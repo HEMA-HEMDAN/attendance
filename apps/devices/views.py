@@ -16,12 +16,14 @@ class DeviceRegisterView(generics.CreateAPIView):
     permission_classes = [IsStudent]
     serializer_class = DeviceRegistrationSerializer
 
-    def perform_create(self, serializer):
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
         device = serializer.save()
         audit(
             action=AuditAction.DEVICE_REGISTERED,
-            actor=self.request.user,
-            organization=self.request.user.organization,
+            actor=request.user,
+            organization=request.user.organization,
             target_type='Device',
             target_id=device.id,
             metadata={
@@ -29,6 +31,7 @@ class DeviceRegisterView(generics.CreateAPIView):
                 'device_name': device.device_name,
             },
         )
+        return Response(DeviceSerializer(device).data, status=status.HTTP_201_CREATED)
 
 
 class DeviceListView(generics.ListAPIView):

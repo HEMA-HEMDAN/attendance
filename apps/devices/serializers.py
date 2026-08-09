@@ -24,6 +24,25 @@ class DeviceRegistrationSerializer(serializers.Serializer):
     device_name = serializers.CharField(max_length=255, required=False, allow_blank=True)
     os_version = serializers.CharField(max_length=50, required=False, allow_blank=True)
 
+    def validate_device_fingerprint(self, value):
+        request = self.context.get('request')
+        if request and hasattr(request.user, 'student_profile'):
+            student = request.user.student_profile
+            org = request.user.organization
+
+            # Reject if this physical device fingerprint is currently ACTIVE under another student account
+            other_active_device = Device.objects.filter(
+                organization=org,
+                device_fingerprint=value,
+                status='ACTIVE',
+            ).exclude(student=student).first()
+
+            if other_active_device:
+                raise serializers.ValidationError(
+                    'This device is already registered to another student. Multi-account device sharing is prohibited.'
+                )
+        return value
+
     def validate_public_key(self, value):
         try:
             key = load_pem_public_key(value.encode(), backend=default_backend())
@@ -39,10 +58,9 @@ class DeviceRegistrationSerializer(serializers.Serializer):
         student = self.context['request'].user.student_profile
         org = self.context['request'].user.organization
 
-        # Revoke old active devices from same fingerprint (re-registration)
+        # Revoke any previous active devices for THIS student (1 student = 1 active device)
         Device.objects.filter(
             student=student,
-            device_fingerprint=validated_data['device_fingerprint'],
             status='ACTIVE',
         ).update(status='REVOKED', revoked_at=timezone.now())
 

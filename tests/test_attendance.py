@@ -268,3 +268,59 @@ class TestTeacherLocationCreation:
         assert res.status_code == 201
         assert res.data['name'] == 'Science Lab 101'
         assert float(res.data['latitude']) == 30.0444
+
+
+@pytest.mark.django_db
+class TestDeviceScoping:
+    def test_register_second_device_revokes_first(self):
+        student = StudentFactory()
+        client = APIClient()
+        client.force_authenticate(user=student.user)
+
+        mock_key = MagicMock()
+        mock_key.key_size = 2048
+        with patch('apps.devices.serializers.load_pem_public_key', return_value=mock_key):
+            res1 = client.post('/api/v1/devices/register/', {
+                'device_fingerprint': 'fp_phone1',
+                'public_key': 'mock_pem_rsa_2048',
+                'device_name': 'Phone 1',
+            })
+            assert res1.status_code == 201
+            d1_id = res1.data['id']
+
+            res2 = client.post('/api/v1/devices/register/', {
+                'device_fingerprint': 'fp_phone2',
+                'public_key': 'mock_pem_rsa_2048',
+                'device_name': 'Phone 2',
+            })
+            assert res2.status_code == 201
+
+            from apps.devices.models import Device
+            d1 = Device.objects.get(id=d1_id)
+            assert d1.status == 'REVOKED'
+
+    def test_register_same_fingerprint_for_second_student_rejected(self):
+        s1 = StudentFactory()
+        s2 = StudentFactory(user__organization=s1.organization)
+        
+        mock_key = MagicMock()
+        mock_key.key_size = 2048
+        with patch('apps.devices.serializers.load_pem_public_key', return_value=mock_key):
+            c1 = APIClient()
+            c1.force_authenticate(user=s1.user)
+            res1 = c1.post('/api/v1/devices/register/', {
+                'device_fingerprint': 'shared_phone_fp',
+                'public_key': 'mock_pem_rsa_2048',
+                'device_name': 'Shared Phone',
+            })
+            assert res1.status_code == 201
+
+            c2 = APIClient()
+            c2.force_authenticate(user=s2.user)
+            res2 = c2.post('/api/v1/devices/register/', {
+                'device_fingerprint': 'shared_phone_fp',
+                'public_key': 'mock_pem_rsa_2048',
+                'device_name': 'Shared Phone',
+            })
+            assert res2.status_code == 400
+            assert 'already registered to another student' in str(res2.data['device_fingerprint'])

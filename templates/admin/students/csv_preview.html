@@ -1,0 +1,83 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<div style="max-width:900px;margin:24px auto;">
+  <h2>📋 Import Preview</h2>
+
+  <div style="display:flex;gap:16px;margin:16px 0;">
+    <div style="background:#d4edda;padding:12px 20px;border-radius:6px;flex:1;text-align:center;">
+      <div style="font-size:28px;font-weight:bold;color:#155724;">{{ valid|length }}</div>
+      <div style="color:#155724;">Ready to import</div>
+    </div>
+    <div style="background:#f8d7da;padding:12px 20px;border-radius:6px;flex:1;text-align:center;">
+      <div style="font-size:28px;font-weight:bold;color:#721c24;">{{ invalid|length }}</div>
+      <div style="color:#721c24;">Invalid rows</div>
+    </div>
+    <div style="background:#fff3cd;padding:12px 20px;border-radius:6px;flex:1;text-align:center;">
+      <div style="font-size:28px;font-weight:bold;color:#856404;">{{ dupes|length }}</div>
+      <div style="color:#856404;">Duplicates (skipped)</div>
+    </div>
+  </div>
+
+  {% if invalid %}
+  <h3 style="color:#721c24;">⚠️ Invalid Rows</h3>
+  <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
+    <thead>
+      <tr style="background:#f8d7da;">
+        <th style="padding:8px;border:1px solid #ddd;text-align:left;">Row</th>
+        <th style="padding:8px;border:1px solid #ddd;text-align:left;">Data</th>
+        <th style="padding:8px;border:1px solid #ddd;text-align:left;">Errors</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in invalid %}
+      <tr>
+        <td style="padding:8px;border:1px solid #ddd;">{{ row.row }}</td>
+        <td style="padding:8px;border:1px solid #ddd;font-size:12px;">{{ row.data }}</td>
+        <td style="padding:8px;border:1px solid #ddd;color:#721c24;">{{ row.errors|join:", " }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {% if valid %}
+  <h3 style="color:#155724;">✅ Valid Rows (will be imported)</h3>
+  <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
+    <thead>
+      <tr style="background:#d4edda;">
+        <th style="padding:8px;border:1px solid #ddd;">student_id</th>
+        <th style="padding:8px;border:1px solid #ddd;">First Name</th>
+        <th style="padding:8px;border:1px solid #ddd;">Last Name</th>
+        <th style="padding:8px;border:1px solid #ddd;">Email</th>
+        <th style="padding:8px;border:1px solid #ddd;">Group</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in valid %}
+      <tr>
+        <td style="padding:8px;border:1px solid #ddd;">{{ row.student_id }}</td>
+        <td style="padding:8px;border:1px solid #ddd;">{{ row.first_name }}</td>
+        <td style="padding:8px;border:1px solid #ddd;">{{ row.last_name }}</td>
+        <td style="padding:8px;border:1px solid #ddd;">{{ row.email }}</td>
+        <td style="padding:8px;border:1px solid #ddd;">{{ row.group.name|default:"—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if valid %}
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <input type="hidden" name="confirm" value="1">
+    <input type="file" name="file" id="file" accept=".csv" style="display:none">
+    <button type="submit" onclick="reattachFile()"
+            style="background:#28a745;color:white;padding:12px 24px;border:none;border-radius:4px;cursor:pointer;font-size:15px;margin-right:12px;">
+      ✅ Confirm Import ({{ valid|length }} students)
+    </button>
+    <a href="../import-csv/" style="color:#417690;">← Re-upload</a>
+    <a href=".." style="margin-left:16px;color:#6c757d;">Cancel</a>
+  </form>
+  {% endif %}
+  {% endif %}
+</div>
+{% endblock %}

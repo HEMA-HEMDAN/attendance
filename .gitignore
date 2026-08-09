@@ -1,0 +1,39 @@
+# Environments & dependencies
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment / secret files
+.env
+!.env.example
+
+# Database files
+*.sqlite3
+*.db
+
+# Django local files
+staticfiles/
+media/
+
+# Unit test / coverage reports
+.pytest_cache/
+.coverage
+htmlcov/
+.cache
+
+# Logs & temp files
+*.log
+tmp/
+
+# IDE / OS specific
+.vscode/
+.idea/
+.DS_Store

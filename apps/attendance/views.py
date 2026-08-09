@@ -1,0 +1,255 @@
+"""Attendance views."""
+
+import logging
+from django.utils import timezone
+from rest_framework import generics, status, filters
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from apps.accounts.permissions import IsTeacher, IsStudent, IsOrganizationAdmin, IsAdminOrTeacher
+from apps.audit.service import audit
+from apps.audit.models import AuditAction
+
+from .models import AttendanceSession, AttendanceRecord, DeviceChallenge, SessionStatus
+from .serializers import (
+    AttendanceSessionSerializer, SessionCreateSerializer,
+    CheckInRequestSerializer, AttendanceRecordSerializer,
+)
+from .verification import AttendanceVerificationService, VerificationError
+
+logger = logging.getLogger(__name__)
+
+
+def get_client_ip(request):
+    x_forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded:
+        return x_forwarded.split(',')[0].strip()
+    return request.META.get('REMOTE_ADDR')
+
+
+class SessionListCreateView(generics.ListCreateAPIView):
+    """Teacher creates sessions; admin and teacher can list."""
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['course__name', 'group__name']
+
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [IsAdminOrTeacher()]
+        return [IsTeacher()]
+
+    def get_serializer_class(self):
+        if self.request.method == 'POST':
+            return SessionCreateSerializer
+        return AttendanceSessionSerializer
+
+    def get_queryset(self):
+        qs = AttendanceSession.objects.filter(
+            organization=self.request.user.organization
+        ).select_related('course', 'group', 'teacher__user', 'location').order_by('-created_at')
+
+        if self.request.user.is_teacher:
+            qs = qs.filter(teacher__user=self.request.user)
+
+        status_filter = self.request.query_params.get('status')
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+
+        return qs
+
+    def perform_create(self, serializer):
+        session = serializer.save()
+        audit(
+            action=AuditAction.SESSION_CREATED,
+            actor=self.request.user,
+            organization=self.request.user.organization,
+            target_type='AttendanceSession',
+            target_id=session.id,
+            metadata={
+                'course': session.course.name,
+                'group': session.group.name,
+            },
+        )
+
+
+class SessionCloseView(APIView):
+    """Teacher closes their own session."""
+    permission_classes = [IsTeacher]
+
+    def post(self, request, pk):
+        try:
+            session = AttendanceSession.objects.get(
+                pk=pk,
+                teacher__user=request.user,
+                organization=request.user.organization,
+            )
+        except AttendanceSession.DoesNotExist:
+            return Response({'detail': 'Session not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if session.status != SessionStatus.ACTIVE:
+            return Response(
+                {'detail': f'Session is already {session.status.lower()}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        session.status = SessionStatus.CLOSED
+        session.closed_at = timezone.now()
+        session.save(update_fields=['status', 'closed_at'])
+
+        audit(
+            action=AuditAction.SESSION_CLOSED,
+            actor=request.user,
+            organization=request.user.organization,
+            target_type='AttendanceSession',
+            target_id=session.id,
+        )
+
+        return Response(AttendanceSessionSerializer(session).data)
+
+
+class ChallengeRequestView(APIView):
+    """
+    Student requests a challenge token.
+    The mobile signs it with the device private key after biometric auth.
+    """
+    permission_classes = [IsStudent]
+
+    def post(self, request, session_id):
+        device_id = request.data.get('device_id')
+        if not device_id:
+            return Response({'detail': 'device_id required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        student = request.user.student_profile
+        svc = AttendanceVerificationService(student, get_client_ip(request))
+
+        try:
+            challenge = svc.issue_challenge(device_id=device_id, session_id=session_id)
+        except VerificationError as exc:
+            return Response(
+                {'detail': exc.message, 'code': exc.code},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        return Response({
+            'challenge_token': challenge.challenge_token,
+            'expires_at': challenge.expires_at,
+        })
+
+
+class CheckInView(APIView):
+    """
+    Student submits attendance.
+    The server runs the full verification pipeline and makes the final decision.
+    """
+    permission_classes = [IsStudent]
+
+    def post(self, request, session_id):
+        serializer = CheckInRequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        data = serializer.validated_data
+        student = request.user.student_profile
+        svc = AttendanceVerificationService(student, get_client_ip(request))
+
+        try:
+            record = svc.verify(
+                session_id=session_id,
+                device_id=data['device_id'],
+                challenge_token=data['challenge_token'],
+                signature_b64=data['signature'],
+                latitude=data.get('latitude'),
+                longitude=data.get('longitude'),
+                location_accuracy=data.get('location_accuracy'),
+                location_timestamp=data.get('location_timestamp'),
+                mock_location=data.get('mock_location', False),
+            )
+        except VerificationError as exc:
+            audit(
+                action=AuditAction.ATTENDANCE_REJECTED,
+                actor=request.user,
+                organization=request.user.organization,
+                metadata={'code': exc.code, 'session_id': session_id},
+                ip_address=get_client_ip(request),
+            )
+            return Response(
+                {'detail': exc.message, 'code': exc.code},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Broadcast live update to teacher WebSocket (non-blocking)
+        from .signals import broadcast_attendance_record
+        broadcast_attendance_record(record)
+
+        return Response(
+            AttendanceRecordSerializer(record).data,
+            status=status.HTTP_201_CREATED
+        )
+
+
+class SessionRecordsView(generics.ListAPIView):
+    """Teacher/admin views records for a session."""
+    permission_classes = [IsAdminOrTeacher]
+    serializer_class = AttendanceRecordSerializer
+
+    def get_queryset(self):
+        session_id = self.kwargs['pk']
+        return AttendanceRecord.objects.filter(
+            session__id=session_id,
+            session__organization=self.request.user.organization,
+        ).select_related('student__user').order_by('verified_at')
+
+
+class StudentAttendanceHistoryView(generics.ListAPIView):
+    """Student views their own attendance history."""
+    permission_classes = [IsStudent]
+    serializer_class = AttendanceRecordSerializer
+
+    def get_queryset(self):
+        student = getattr(self.request.user, 'student_profile', None)
+        if not student:
+            return AttendanceRecord.objects.none()
+        return AttendanceRecord.objects.filter(
+            student=student
+        ).select_related('session__course').order_by('-verified_at')
+
+
+class ActiveSessionsForStudentView(generics.ListAPIView):
+    """Student sees active sessions for their group."""
+    permission_classes = [IsStudent]
+    serializer_class = AttendanceSessionSerializer
+
+    def get_queryset(self):
+        student = getattr(self.request.user, 'student_profile', None)
+        if not student:
+            return AttendanceSession.objects.none()
+        return AttendanceSession.objects.filter(
+            organization=student.organization,
+            group=student.group,
+            status=SessionStatus.ACTIVE,
+        ).select_related('course', 'group', 'teacher__user', 'location')
+
+
+class DashboardView(APIView):
+    """Admin dashboard summary."""
+    permission_classes = [IsOrganizationAdmin]
+
+    def get(self, request):
+        from apps.students.models import Student
+        from apps.teachers.models import Teacher
+        from apps.groups.models import Group
+
+        org = request.user.organization
+        today = timezone.now().date()
+
+        return Response({
+            'total_students': Student.objects.filter(organization=org, status='ACTIVE').count(),
+            'total_teachers': Teacher.objects.filter(organization=org).count(),
+            'total_groups': Group.objects.filter(organization=org, status='ACTIVE').count(),
+            'active_sessions': AttendanceSession.objects.filter(
+                organization=org, status=SessionStatus.ACTIVE
+            ).count(),
+            'today_attendance': AttendanceRecord.objects.filter(
+                session__organization=org,
+                verified_at__date=today,
+            ).count(),
+        })

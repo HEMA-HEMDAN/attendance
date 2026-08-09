@@ -1,0 +1,18 @@
+from django.urls import path
+from .views import (
+    SessionListCreateView, SessionCloseView,
+    ChallengeRequestView, CheckInView,
+    SessionRecordsView, StudentAttendanceHistoryView,
+    ActiveSessionsForStudentView, DashboardView,
+)
+
+urlpatterns = [
+    path('dashboard/', DashboardView.as_view(), name='attendance-dashboard'),
+    path('sessions/', SessionListCreateView.as_view(), name='session-list'),
+    path('sessions/<int:pk>/close/', SessionCloseView.as_view(), name='session-close'),
+    path('sessions/<int:session_id>/challenge/', ChallengeRequestView.as_view(), name='challenge-request'),
+    path('sessions/<int:session_id>/check-in/', CheckInView.as_view(), name='check-in'),
+    path('sessions/<int:pk>/records/', SessionRecordsView.as_view(), name='session-records'),
+    path('student/history/', StudentAttendanceHistoryView.as_view(), name='student-history'),
+    path('student/active-sessions/', ActiveSessionsForStudentView.as_view(), name='active-sessions'),
+]

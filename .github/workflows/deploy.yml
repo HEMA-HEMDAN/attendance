@@ -25,10 +25,15 @@ jobs:
             
             # Pull latest code or clone if it doesn't exist
             if [ -d ".git" ]; then
+              git fetch --all
+              git reset --hard origin/master
               git pull origin master
             else
-              # Replace with your actual github repo URL
-              git clone https://github.com/your_username/attendance.git .
+              # Initialize and force pull to avoid non-empty directory issues
+              git init
+              git remote add origin https://github.com/HEMA-HEMDAN/attendance.git
+              git fetch
+              git checkout -t origin/master -f
             fi
             
             # Create .env.prod file from GitHub Secrets

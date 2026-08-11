@@ -27,6 +27,7 @@ echo "Configuring PostgreSQL Database and User..."
 sudo -u postgres psql -c "CREATE DATABASE attendance;" || echo "Database 'attendance' might already exist."
 sudo -u postgres psql -c "CREATE USER attendance_user WITH PASSWORD '$DB_PASSWORD';" || echo "User 'attendance_user' might already exist."
 sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE attendance TO attendance_user;"
+sudo -u postgres psql -d attendance -c "GRANT ALL ON SCHEMA public TO attendance_user;"
 
 # Ensure Redis is running
 sudo systemctl enable redis-server

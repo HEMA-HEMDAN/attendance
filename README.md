@@ -27,3 +27,14 @@ See `.env.example` for all required variables.
 ```bash
 pytest
 ```
+
+## Local Docker Testing
+
+To test the application locally using Docker (with Nginx), ensure you have PostgreSQL and Redis running locally (on your machine), or you have configured `.env.prod` to point to a local testing database. Then run:
+
+```bash
+# Disable BuildKit if you encounter random crashes during build
+export DOCKER_BUILDKIT=0
+docker compose up --build -d
+```
+Visit `http://localhost` to view the application running through Nginx.

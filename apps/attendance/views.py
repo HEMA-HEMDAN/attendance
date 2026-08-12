@@ -422,9 +422,18 @@ class AttendanceExportView(APIView):
 
         # Get all students for this course/group
         if group_id:
-            students = Student.objects.filter(group_id=group_id, organization=request.user.organization)
+            students = Student.objects.filter(
+                enrollments__group_id=group_id,
+                enrollments__course_id=course_id,
+                organization=request.user.organization,
+                status='ACTIVE'
+            ).distinct()
         else:
-            students = Student.objects.filter(group__courses__id=course_id, organization=request.user.organization).distinct()
+            students = Student.objects.filter(
+                enrollments__course_id=course_id,
+                organization=request.user.organization,
+                status='ACTIVE'
+            ).distinct()
 
         # Build records map: {student_id: {session_id: status}}
         records = AttendanceRecord.objects.filter(

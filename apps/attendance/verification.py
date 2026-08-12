@@ -159,9 +159,13 @@ class AttendanceVerificationService:
             raise VerificationError('Student account is not active', 'STUDENT_INACTIVE')
 
         # ── 4. Student enrollment (group match) ───────────────────────
-        if session.group_id != self.student.group_id:
+        enrollment_qs = self.student.enrollments.filter(course_id=session.course_id)
+        if session.group_id:
+            enrollment_qs = enrollment_qs.filter(group_id=session.group_id)
+            
+        if not enrollment_qs.exists():
             raise VerificationError(
-                'Student not enrolled in this session group', 'ENROLLMENT_MISMATCH'
+                'Student not enrolled in this session', 'ENROLLMENT_MISMATCH'
             )
 
         # ── 5. Session status ─────────────────────────────────────────

@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import (
     SessionListCreateView, SessionCloseView, SessionReopenView,
-    ChallengeRequestView, CheckInView,
+    SessionDeleteView, ChallengeRequestView, CheckInView,
     SessionRecordsView, ManualAttendanceOverrideView,
     StudentAttendanceHistoryView, ActiveSessionsForStudentView,
     DashboardView, AttendanceExportView,
@@ -16,6 +16,7 @@ urlpatterns = [
     path('sessions/', SessionListCreateView.as_view(), name='session-list-create'),
     path('sessions/<int:pk>/close/', SessionCloseView.as_view(), name='session-close'),
     path('sessions/<int:pk>/reopen/', SessionReopenView.as_view(), name='session-reopen'),
+    path('sessions/<int:pk>/delete/', SessionDeleteView.as_view(), name='session-delete'),
     path('sessions/<int:session_id>/challenge/', ChallengeRequestView.as_view(), name='challenge-request'),
     path('sessions/<int:session_id>/check-in/', CheckInView.as_view(), name='check-in'),
     path('sessions/<int:pk>/records/', SessionRecordsView.as_view(), name='session-records'),

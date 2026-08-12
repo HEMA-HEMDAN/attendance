@@ -24,6 +24,7 @@ class AuditAction(models.TextChoices):
     SESSION_CREATED = 'SESSION_CREATED', 'Session Created'
     SESSION_CLOSED = 'SESSION_CLOSED', 'Session Closed'
     SESSION_REOPENED = 'SESSION_REOPENED', 'Session Reopened'
+    SESSION_DELETED = 'SESSION_DELETED', 'Session Deleted'
     SESSION_EXPIRED = 'SESSION_EXPIRED', 'Session Expired'
 
     # Attendance

@@ -11,7 +11,7 @@ class GroupSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'student_count']
 
     def get_student_count(self, obj):
-        return obj.students.filter(status='ACTIVE').count()
+        return obj.enrollments.filter(student__status='ACTIVE').count()
 
     def create(self, validated_data):
         validated_data['organization'] = self.context['request'].user.organization

@@ -24,7 +24,7 @@ class AttendanceSessionSerializer(serializers.ModelSerializer):
     class Meta:
         model = AttendanceSession
         fields = [
-            'id', 'course', 'course_name', 'group', 'group_name',
+            'id', 'name', 'course', 'course_name', 'group', 'group_name',
             'teacher_name', 'latitude', 'longitude', 'radius_meters',
             'status', 'starts_at', 'expires_at', 'closed_at',
             'biometric_required', 'location_required',
@@ -50,10 +50,13 @@ class AttendanceSessionSerializer(serializers.ModelSerializer):
 
     def get_total_enrolled(self, obj):
         from apps.students.models import Student
-        return Student.objects.filter(group=obj.group, status='ACTIVE').count()
+        if obj.group:
+            return Student.objects.filter(enrollments__course=obj.course, enrollments__group=obj.group, status='ACTIVE').distinct().count()
+        return Student.objects.filter(enrollments__course=obj.course, status='ACTIVE').distinct().count()
 
 
 class SessionCreateSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=255, required=False, allow_blank=True, allow_null=True)
     course = serializers.PrimaryKeyRelatedField(queryset=Course.objects.none())
     group = serializers.PrimaryKeyRelatedField(queryset=Group.objects.none(), required=False, allow_null=True)
     session_type = serializers.ChoiceField(choices=[('LECTURE', 'Lecture'), ('LAB', 'Lab'), ('TUTORIAL', 'Tutorial')], default='LECTURE')

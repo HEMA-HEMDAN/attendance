@@ -142,6 +142,37 @@ class SessionReopenView(APIView):
         )
         return Response({'detail': 'Session reopened successfully'})
 
+
+class SessionDeleteView(APIView):
+    """Teacher or Admin deletes a session completely."""
+    permission_classes = [IsAdminOrTeacher]
+
+    def delete(self, request, pk):
+        try:
+            session = AttendanceSession.objects.get(
+                pk=pk,
+                organization=request.user.organization,
+            )
+        except AttendanceSession.DoesNotExist:
+            return Response({'detail': 'Session not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.user.role in ['DOCTOR', 'TEACHING_ASSISTANT'] and session.teacher.user != request.user:
+            return Response({'detail': 'You can only delete your own sessions'}, status=status.HTTP_403_FORBIDDEN)
+
+        # Delete all records first due to PROTECT constraint
+        AttendanceRecord.objects.filter(session=session).delete()
+        session_id = session.id
+        session.delete()
+
+        audit(
+            action=AuditAction.SESSION_DELETED,
+            actor=request.user,
+            organization=request.user.organization,
+            target_type='AttendanceSession',
+            target_id=session_id,
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 class ChallengeRequestView(APIView):
     """
     Student requests a challenge token.
@@ -320,14 +351,23 @@ class ActiveSessionsForStudentView(generics.ListAPIView):
     serializer_class = AttendanceSessionSerializer
 
     def get_queryset(self):
+        from django.db.models import Q
+        
         student = getattr(self.request.user, 'student_profile', None)
         if not student:
             return AttendanceSession.objects.none()
+            
+        enrollments = student.enrollments.all()
+        course_ids = [e.course_id for e in enrollments]
+        group_ids = [e.group_id for e in enrollments if e.group_id]
+        
         return AttendanceSession.objects.filter(
             organization=student.organization,
-            group=student.group,
             status=SessionStatus.ACTIVE,
-        ).select_related('course', 'group', 'teacher__user')
+        ).filter(
+            Q(course_id__in=course_ids, group__isnull=True) |
+            Q(group_id__in=group_ids)
+        ).select_related('course', 'group', 'teacher__user').distinct()
 
 
 class DashboardView(APIView):

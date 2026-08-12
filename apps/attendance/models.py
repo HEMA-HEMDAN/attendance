@@ -56,6 +56,7 @@ class AttendanceSession(models.Model):
         on_delete=models.PROTECT,
         related_name='sessions',
     )
+    name = models.CharField(max_length=255, blank=True, null=True, help_text="Optional session name or topic")
     latitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
     longitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
     radius_meters = models.FloatField(default=50.0)

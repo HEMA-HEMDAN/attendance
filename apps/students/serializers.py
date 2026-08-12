@@ -18,13 +18,12 @@ class StudentSerializer(serializers.ModelSerializer):
     first_name = serializers.CharField(source='user.first_name', read_only=True)
     last_name = serializers.CharField(source='user.last_name', read_only=True)
     is_active = serializers.BooleanField(source='user.is_active', read_only=True)
-    group_name = serializers.CharField(source='group.name', read_only=True, allow_null=True)
 
     class Meta:
         model = Student
         fields = [
             'id', 'student_id', 'email', 'personal_email', 'first_name', 'last_name',
-            'phone', 'status', 'group', 'group_name', 'is_active', 'created_at',
+            'phone', 'status', 'is_active', 'created_at',
         ]
         read_only_fields = ['id', 'created_at', 'email', 'first_name', 'last_name', 'is_active']
 
@@ -35,19 +34,10 @@ class StudentCreateSerializer(serializers.Serializer):
     last_name = serializers.CharField(max_length=150)
     email = serializers.EmailField()
     phone = serializers.CharField(max_length=30, required=False, allow_blank=True)
-    group = serializers.PrimaryKeyRelatedField(
-        queryset=Group.objects.none(), required=False, allow_null=True
-    )
     password = serializers.CharField(write_only=True, min_length=8, required=False)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        request = self.context.get('request')
-        if request and request.user.organization_id:
-            self.fields['group'].queryset = Group.objects.filter(
-                organization=request.user.organization,
-                status='ACTIVE',
-            )
 
     def validate_student_id(self, value):
         org = self.context['request'].user.organization
@@ -63,7 +53,6 @@ class StudentCreateSerializer(serializers.Serializer):
     @transaction.atomic
     def create(self, validated_data):
         org = self.context['request'].user.organization
-        group = validated_data.pop('group', None)
         phone = validated_data.pop('phone', '')
         password = validated_data.pop('password', None) or secrets.token_urlsafe(12)
 
@@ -79,7 +68,6 @@ class StudentCreateSerializer(serializers.Serializer):
             user=user,
             organization=org,
             student_id=validated_data['student_id'],
-            group=group,
             phone=phone,
         )
         return student
@@ -90,7 +78,7 @@ class CSVImportSerializer(serializers.Serializer):
     Validates and imports students from CSV.
 
     Expected CSV columns:
-      student_id, first_name, last_name, email, group (optional)
+      student_id, first_name, last_name, email
 
     The import is transactional: if it fails mid-way, no partial data is committed.
     """
@@ -135,10 +123,6 @@ class CSVImportSerializer(serializers.Serializer):
         existing_emails = set(
             User.objects.values_list('email', flat=True)
         )
-        group_map = {
-            g.name.lower(): g
-            for g in Group.objects.filter(organization=organization, status='ACTIVE')
-        }
 
         valid_rows = []
         invalid_rows = []
@@ -154,7 +138,6 @@ class CSVImportSerializer(serializers.Serializer):
             first_name = row.get('first_name', '')
             last_name = row.get('last_name', '')
             email = row.get('email', '')
-            group_name = row.get('group', '')
 
             if not student_id:
                 errors.append('student_id is required')
@@ -166,12 +149,6 @@ class CSVImportSerializer(serializers.Serializer):
                 errors.append('email is required')
             elif '@' not in email:
                 errors.append('email is invalid')
-
-            group = None
-            if group_name:
-                group = group_map.get(group_name.lower())
-                if group is None:
-                    errors.append(f'Group "{group_name}" not found')
 
             # Duplicate check within file
             if student_id in seen_ids:
@@ -198,8 +175,6 @@ class CSVImportSerializer(serializers.Serializer):
                 'first_name': first_name,
                 'last_name': last_name,
                 'email': email,
-                'group': {'id': group.id, 'name': group.name} if group else None,
-                '_group_obj': group,  # internal use only, stripped from response
             })
 
         return valid_rows, invalid_rows, duplicates
@@ -222,7 +197,6 @@ class CSVImportSerializer(serializers.Serializer):
                 user=user,
                 organization=organization,
                 student_id=row['student_id'],
-                group=row.get('_group_obj'),  # use actual model instance
             )
             created.append(student)
         return created

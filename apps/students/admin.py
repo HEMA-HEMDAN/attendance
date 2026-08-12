@@ -11,7 +11,7 @@ from django.http import HttpResponse
 
 from apps.accounts.admin import OrgScopedAdminMixin
 from apps.devices.models import Device
-from .models import Student, StudentStatus
+from .models import Student, StudentStatus, StudentEnrollment
 
 
 class DeviceInline(admin.TabularInline):
@@ -27,8 +27,8 @@ class DeviceInline(admin.TabularInline):
 
 @admin.register(Student)
 class StudentAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
-    list_display = ['student_id', 'get_full_name', 'get_email', 'personal_email', 'department', 'academic_level', 'group', 'organization', 'status_badge']
-    list_filter = ['status', 'organization', 'group', 'department', 'academic_level']
+    list_display = ['student_id', 'get_full_name', 'get_email', 'personal_email', 'department', 'academic_level', 'organization', 'status_badge']
+    list_filter = ['status', 'organization', 'department', 'academic_level']
     search_fields = ['student_id', 'user__email', 'user__first_name', 'user__last_name', 'personal_email']
     readonly_fields = ['created_at', 'updated_at']
     inlines = [DeviceInline]
@@ -36,7 +36,7 @@ class StudentAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
 
     fieldsets = (
         ('Account', {'fields': ('user', 'organization', 'status')}),
-        ('Academic Info', {'fields': ('student_id', 'group', 'department', 'academic_level')}),
+        ('Academic Info', {'fields': ('student_id', 'department', 'academic_level')}),
         ('Contact Info', {'fields': ('phone', 'personal_email')}),
         ('Meta', {'fields': ('created_at', 'updated_at'), 'classes': ('collapse',)}),
     )
@@ -76,11 +76,11 @@ class StudentAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename="students.csv"'
         writer = csv.writer(response)
-        writer.writerow(['student_id', 'first_name', 'last_name', 'email', 'group', 'status'])
-        for s in queryset.select_related('user', 'group'):
+        writer.writerow(['student_id', 'first_name', 'last_name', 'email', 'status'])
+        for s in queryset.select_related('user'):
             writer.writerow([
                 s.student_id, s.user.first_name, s.user.last_name,
-                s.user.email, s.group.name if s.group else '', s.status
+                s.user.email, s.status
             ])
         return response
     export_csv.short_description = 'Export selected to CSV'
@@ -137,3 +137,10 @@ class StudentAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
         extra_context = extra_context or {}
         extra_context['import_url'] = 'import-csv/'
         return super().changelist_view(request, extra_context=extra_context)
+
+
+@admin.register(StudentEnrollment)
+class StudentEnrollmentAdmin(admin.ModelAdmin):
+    list_display = ['student', 'course', 'group', 'created_at']
+    list_filter = ['course', 'group']
+    search_fields = ['student__student_id', 'student__user__email', 'course__code']

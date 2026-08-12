@@ -21,9 +21,18 @@ class DeviceRegisterView(generics.CreateAPIView):
         
         # Check if the student has an active session
         from apps.attendance.models import AttendanceSession, SessionStatus
+        from django.db.models import Q
+        
+        enrollments = student.enrollments.all()
+        course_ids = [e.course_id for e in enrollments]
+        group_ids = [e.group_id for e in enrollments if e.group_id]
+
         has_active_session = AttendanceSession.objects.filter(
-            group=student.group,
+            organization=student.organization,
             status=SessionStatus.ACTIVE
+        ).filter(
+            Q(course_id__in=course_ids, group__isnull=True) |
+            Q(group_id__in=group_ids)
         ).exists()
 
         if has_active_session:

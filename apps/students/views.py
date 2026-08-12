@@ -34,7 +34,7 @@ class StudentListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         qs = Student.objects.filter(
             organization=self.request.user.organization
-        ).select_related('user', 'group').order_by('student_id')
+        ).select_related('user').prefetch_related('enrollments__group').order_by('student_id')
 
         status_filter = self.request.query_params.get('status')
         if status_filter:
@@ -42,7 +42,7 @@ class StudentListCreateView(generics.ListCreateAPIView):
 
         group_id = self.request.query_params.get('group')
         if group_id:
-            qs = qs.filter(group_id=group_id)
+            qs = qs.filter(enrollments__group_id=group_id)
 
         return qs
 
@@ -69,7 +69,7 @@ class StudentDetailView(generics.RetrieveUpdateDestroyAPIView):
     def get_queryset(self):
         return Student.objects.filter(
             organization=self.request.user.organization
-        ).select_related('user', 'group')
+        ).select_related('user').prefetch_related('enrollments__group')
 
     def perform_update(self, serializer):
         student = serializer.save()

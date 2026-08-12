@@ -5,7 +5,7 @@ from datetime import timedelta
 from apps.organizations.models import Organization, OrganizationStatus
 from apps.accounts.models import User, Role
 from apps.groups.models import Group, GroupStatus
-from apps.students.models import Student, StudentStatus
+from apps.students.models import Student, StudentStatus, StudentEnrollment
 from apps.teachers.models import Teacher
 from apps.courses.models import Course, CourseStatus
 from apps.locations.models import AttendanceLocation, LocationStatus
@@ -18,187 +18,130 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         self.stdout.write(self.style.NOTICE('Seeding demo data...'))
 
-        # 1. Organization
         org, _ = Organization.objects.get_or_create(
             slug='tech-uni',
             defaults={'name': 'Tech University', 'status': OrganizationStatus.ACTIVE}
         )
 
-        # 2. Users
-        # Admin
-        admin_user, created = User.objects.get_or_create(
-            email='admin@techuni.edu',
-            defaults={
-                'first_name': 'Admin',
-                'last_name': 'User',
-                'role': Role.ADMIN,
-                'organization': org,
-                'is_staff': True,
-                'is_superuser': True,
-            }
-        )
-        if created:
-            admin_user.set_password('AdminPass123!')
-            admin_user.save()
+        def create_user(email, first, last, role, is_admin=False):
+            u, created = User.objects.get_or_create(
+                email=email,
+                defaults={
+                    'first_name': first,
+                    'last_name': last,
+                    'role': role,
+                    'organization': org,
+                    'is_staff': is_admin,
+                    'is_superuser': is_admin,
+                }
+            )
+            if created:
+                u.set_password('Pass123!')
+                u.save()
+            return u
 
-        # Doctor
-        doctor_user, created = User.objects.get_or_create(
-            email='doctor@techuni.edu',
-            defaults={
-                'first_name': 'Sarah',
-                'last_name': 'Connor',
-                'role': Role.DOCTOR,
-                'organization': org,
-            }
-        )
-        if created:
-            doctor_user.set_password('DoctorPass123!')
-            doctor_user.save()
-
-        doctor_profile, _ = Teacher.objects.get_or_create(
-            user=doctor_user,
-            defaults={'organization': org}
-        )
+        # Users
+        admin_user = create_user('admin@techuni.edu', 'Admin', 'User', Role.ADMIN, True)
         
-        # Teaching Assistant
-        ta_user, created = User.objects.get_or_create(
-            email='ta@techuni.edu',
-            defaults={
-                'first_name': 'Mark',
-                'last_name': 'Johnson',
-                'role': Role.TEACHING_ASSISTANT,
-                'organization': org,
-            }
-        )
-        if created:
-            ta_user.set_password('TaPass123!')
-            ta_user.save()
+        doc_cs301 = create_user('doc301@techuni.edu', 'Sarah', 'Connor', Role.DOCTOR)
+        doc_cs401 = create_user('doc401@techuni.edu', 'Alan', 'Turing', Role.DOCTOR)
+        
+        ta_mark = create_user('ta_mark@techuni.edu', 'Mark', 'Johnson', Role.TEACHING_ASSISTANT)
+        ta_lucy = create_user('ta_lucy@techuni.edu', 'Lucy', 'Smith', Role.TEACHING_ASSISTANT)
+        
+        stu1_user = create_user('student1@techuni.edu', 'John', 'Doe', Role.STUDENT)
+        stu2_user = create_user('student2@techuni.edu', 'Alice', 'Wonderland', Role.STUDENT)
 
-        ta_profile, _ = Teacher.objects.get_or_create(
-            user=ta_user,
-            defaults={'organization': org}
+        # Teachers
+        t_doc301, _ = Teacher.objects.get_or_create(user=doc_cs301, defaults={'organization': org})
+        t_doc401, _ = Teacher.objects.get_or_create(user=doc_cs401, defaults={'organization': org})
+        t_ta_mark, _ = Teacher.objects.get_or_create(user=ta_mark, defaults={'organization': org})
+        t_ta_lucy, _ = Teacher.objects.get_or_create(user=ta_lucy, defaults={'organization': org})
+
+        # Groups (Labs)
+        g_cs301_l1, _ = Group.objects.get_or_create(organization=org, name='CS301-Lab1', defaults={'teaching_assistant': t_ta_mark})
+        g_cs301_l1.teaching_assistant = t_ta_mark
+        g_cs301_l1.save()
+
+        g_cs301_l2, _ = Group.objects.get_or_create(organization=org, name='CS301-Lab2', defaults={'teaching_assistant': t_ta_lucy})
+        g_cs301_l2.teaching_assistant = t_ta_lucy
+        g_cs301_l2.save()
+
+        g_cs401_l1, _ = Group.objects.get_or_create(organization=org, name='CS401-Lab1', defaults={'teaching_assistant': t_ta_mark})
+        g_cs401_l1.teaching_assistant = t_ta_mark
+        g_cs401_l1.save()
+
+        # Courses
+        c_cs301, _ = Course.objects.get_or_create(
+            organization=org, code='CS301',
+            defaults={'name': 'Mobile App Dev', 'teacher': t_doc301, 'department': 'CS', 'level': '3'}
+        )
+        c_cs301.groups.add(g_cs301_l1, g_cs301_l2)
+        
+        c_cs401, _ = Course.objects.get_or_create(
+            organization=org, code='CS401',
+            defaults={'name': 'Artificial Intelligence', 'teacher': t_doc401, 'department': 'CS', 'level': '4'}
+        )
+        c_cs401.groups.add(g_cs401_l1)
+
+        # Students
+        stu1, _ = Student.objects.get_or_create(
+            user=stu1_user, defaults={'organization': org, 'student_id': 'STU-1001', 'department': 'CS', 'academic_level': '3'}
+        )
+        stu2, _ = Student.objects.get_or_create(
+            user=stu2_user, defaults={'organization': org, 'student_id': 'STU-1002', 'department': 'CS', 'academic_level': '3'}
         )
 
-        # Student 1
-        student_user1, created = User.objects.get_or_create(
-            email='student@techuni.edu',
-            defaults={
-                'first_name': 'John',
-                'last_name': 'Doe',
-                'role': Role.STUDENT,
-                'organization': org,
-            }
-        )
-        if created:
-            student_user1.set_password('StudentPass123!')
-            student_user1.save()
+        # Enrollments
+        # stu1: takes CS301 (Lab 1) and CS401 (Lab 1)
+        StudentEnrollment.objects.get_or_create(student=stu1, course=c_cs301, defaults={'group': g_cs301_l1})
+        StudentEnrollment.objects.get_or_create(student=stu1, course=c_cs401, defaults={'group': g_cs401_l1})
+        
+        # stu2: takes CS301 (Lab 2)
+        StudentEnrollment.objects.get_or_create(student=stu2, course=c_cs301, defaults={'group': g_cs301_l2})
 
-        # Student 2
-        student_user2, created = User.objects.get_or_create(
-            email='student2@techuni.edu',
-            defaults={
-                'first_name': 'Alice',
-                'last_name': 'Smith',
-                'role': Role.STUDENT,
-                'organization': org,
-            }
-        )
-        if created:
-            student_user2.set_password('StudentPass123!')
-            student_user2.save()
-
-        # 3. Group
-        group, _ = Group.objects.get_or_create(
-            organization=org,
-            name='CS-101 Class A',
-            defaults={
-                'status': GroupStatus.ACTIVE,
-                'teaching_assistant': ta_profile
-            }
-        )
-        group.teaching_assistant = ta_profile
-        group.save()
-
-        # Student Profiles
-        student_profile1, _ = Student.objects.get_or_create(
-            user=student_user1,
-            defaults={
-                'organization': org,
-                'student_id': 'STU-1001',
-                'group': group,
-                'department': 'Computer Science',
-                'academic_level': 1,
-                'status': StudentStatus.ACTIVE,
-            }
-        )
-        if student_profile1.group != group:
-            student_profile1.group = group
-            student_profile1.save()
-
-        student_profile2, _ = Student.objects.get_or_create(
-            user=student_user2,
-            defaults={
-                'organization': org,
-                'student_id': 'STU-1002',
-                'group': group,
-                'department': 'Computer Science',
-                'academic_level': 1,
-                'status': StudentStatus.ACTIVE,
-            }
-        )
-        if student_profile2.group != group:
-            student_profile2.group = group
-            student_profile2.save()
-
-        # 4. Course
-        course, _ = Course.objects.get_or_create(
-            organization=org,
-            code='CS301',
-            defaults={
-                'name': 'Mobile App Development',
-                'teacher': doctor_profile,
-                'academic_year': '2026-2027',
-                'semester': 1,
-                'department': 'Computer Science',
-                'level': 3,
-                'status': CourseStatus.ACTIVE,
-            }
-        )
-        course.groups.add(group)
-
-        # 6. Active Session
+        # Active Sessions
         now = timezone.now()
         expires = now + timedelta(hours=2)
 
-        session, created = AttendanceSession.objects.get_or_create(
-            organization=org,
-            course=course,
-            status=SessionStatus.ACTIVE,
+        # 1. Lecture for CS301 (No group, both students should see it)
+        session_lec, _ = AttendanceSession.objects.get_or_create(
+            organization=org, course=c_cs301, group=None, name='Intro to React Native',
             defaults={
-                'teacher': doctor_profile,
-                'session_type': 'LECTURE',
-                'latitude': 30.0444210,
-                'longitude': 31.2357120,
-                'radius_meters': 500,
-                'starts_at': now,
-                'expires_at': expires,
-                'biometric_required': True,
-                'location_required': True,
-                'late_after_minutes': 15,
+                'teacher': t_doc301, 'session_type': 'LECTURE',
+                'status': SessionStatus.ACTIVE, 'starts_at': now, 'expires_at': expires,
+                'latitude': 30.0444, 'longitude': 31.2357, 'radius_meters': 500,
                 'duration_minutes': 120,
             }
         )
-        if not created and session.expires_at < now:
-            session.expires_at = expires
-            session.status = SessionStatus.ACTIVE
-            session.save()
+        if session_lec.expires_at < now:
+            session_lec.expires_at = expires
+            session_lec.status = SessionStatus.ACTIVE
+            session_lec.save()
+
+        # 2. Lab for CS301-Lab2 (Only Student 2 should see it)
+        session_lab, _ = AttendanceSession.objects.get_or_create(
+            organization=org, course=c_cs301, group=g_cs301_l2, name='Lab Assignment 1',
+            defaults={
+                'teacher': t_ta_lucy, 'session_type': 'LAB',
+                'status': SessionStatus.ACTIVE, 'starts_at': now, 'expires_at': expires,
+                'latitude': 30.0444, 'longitude': 31.2357, 'radius_meters': 100,
+                'duration_minutes': 120,
+            }
+        )
+        if session_lab.expires_at < now:
+            session_lab.expires_at = expires
+            session_lab.status = SessionStatus.ACTIVE
+            session_lab.save()
 
         self.stdout.write(self.style.SUCCESS('\nSuccessfully seeded demo data!'))
-        self.stdout.write(self.style.SUCCESS('============================================='))
-        self.stdout.write(self.style.SUCCESS('Credentials for testing:'))
-        self.stdout.write(self.style.SUCCESS('  Student 1 : student@techuni.edu / StudentPass123!'))
-        self.stdout.write(self.style.SUCCESS('  Student 2 : student2@techuni.edu / StudentPass123!'))
-        self.stdout.write(self.style.SUCCESS('  Doctor    : doctor@techuni.edu / DoctorPass123!'))
-        self.stdout.write(self.style.SUCCESS('  TA        : ta@techuni.edu / TaPass123!'))
-        self.stdout.write(self.style.SUCCESS('  Admin     : admin@techuni.edu   / AdminPass123!'))
-        self.stdout.write(self.style.SUCCESS('============================================='))
+        self.stdout.write(self.style.SUCCESS('All passwords are: Pass123!'))
+        self.stdout.write(self.style.SUCCESS('Users:'))
+        self.stdout.write(self.style.SUCCESS('  student1@techuni.edu (CS301 Lab1, CS401 Lab1)'))
+        self.stdout.write(self.style.SUCCESS('  student2@techuni.edu (CS301 Lab2)'))
+        self.stdout.write(self.style.SUCCESS('  doc301@techuni.edu'))
+        self.stdout.write(self.style.SUCCESS('  doc401@techuni.edu'))
+        self.stdout.write(self.style.SUCCESS('  ta_mark@techuni.edu'))
+        self.stdout.write(self.style.SUCCESS('  ta_lucy@techuni.edu'))
+        self.stdout.write(self.style.SUCCESS('  admin@techuni.edu'))
+

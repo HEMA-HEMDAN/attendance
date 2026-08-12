@@ -27,21 +27,18 @@ class DeviceInline(admin.TabularInline):
 
 @admin.register(Student)
 class StudentAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
-    list_display = [
-        'student_id', 'get_full_name', 'get_email', 'group',
-        'status_badge', 'created_at',
-    ]
-    list_filter = ['status', 'group', 'organization']
-    search_fields = ['student_id', 'user__first_name', 'user__last_name', 'user__email']
-    raw_id_fields = ['user']
+    list_display = ['student_id', 'get_full_name', 'get_email', 'personal_email', 'department', 'academic_level', 'group', 'organization', 'status_badge']
+    list_filter = ['status', 'organization', 'group', 'department', 'academic_level']
+    search_fields = ['student_id', 'user__email', 'user__first_name', 'user__last_name', 'personal_email']
     readonly_fields = ['created_at', 'updated_at']
     inlines = [DeviceInline]
     actions = ['deactivate_students', 'activate_students', 'export_csv']
 
     fieldsets = (
-        ('Student Info', {'fields': ('user', 'student_id', 'phone')}),
-        ('Organization', {'fields': ('organization', 'group', 'status')}),
-        ('Timestamps', {'fields': ('created_at', 'updated_at'), 'classes': ('collapse',)}),
+        ('Account', {'fields': ('user', 'organization', 'status')}),
+        ('Academic Info', {'fields': ('student_id', 'group', 'department', 'academic_level')}),
+        ('Contact Info', {'fields': ('phone', 'personal_email')}),
+        ('Meta', {'fields': ('created_at', 'updated_at'), 'classes': ('collapse',)}),
     )
 
     def get_full_name(self, obj):

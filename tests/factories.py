@@ -50,7 +50,7 @@ class TeacherUserFactory(DjangoModelFactory):
     email = factory.Sequence(lambda n: f'teacher{n}@example.com')
     first_name = 'Teacher'
     last_name = factory.Sequence(lambda n: f'User{n}')
-    role = Role.TEACHER
+    role = Role.DOCTOR
     organization = factory.SubFactory(OrganizationFactory)
     is_active = True
 

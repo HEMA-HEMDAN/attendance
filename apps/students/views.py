@@ -4,7 +4,7 @@ from rest_framework import generics, filters, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.permissions import IsOrganizationAdmin, IsStudent, IsAdminOrTeacher
+from apps.accounts.permissions import IsOrganizationAdmin, IsStudent, IsTeacherOrAdmin
 from apps.audit.service import audit
 from apps.audit.models import AuditAction
 
@@ -23,7 +23,7 @@ class StudentListCreateView(generics.ListCreateAPIView):
 
     def get_permissions(self):
         if self.request.method == 'GET':
-            return [IsAdminOrTeacher()]
+            return [IsTeacherOrAdmin()]
         return [IsOrganizationAdmin()]
 
     def get_serializer_class(self):
@@ -175,3 +175,27 @@ class MyProfileView(generics.RetrieveAPIView):
 
     def get_object(self):
         return self.request.user.student_profile
+
+
+class UpdatePersonalEmailView(APIView):
+    """Student can update their personal email (Gmail) for fallback communications."""
+    permission_classes = [IsStudent]
+
+    def post(self, request):
+        email = request.data.get('personal_email')
+        if not email or '@' not in email:
+            return Response({'detail': 'A valid personal_email is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        student = request.user.student_profile
+        student.personal_email = email
+        student.save()
+        
+        audit(
+            action=AuditAction.STUDENT_UPDATED,
+            actor=request.user,
+            organization=request.user.organization,
+            target_type='Student',
+            target_id=student.id,
+            metadata={'updated_field': 'personal_email'}
+        )
+        return Response({'detail': 'Personal email updated successfully', 'personal_email': email})

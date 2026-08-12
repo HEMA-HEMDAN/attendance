@@ -25,6 +25,7 @@ class AttendanceStatus(models.TextChoices):
     PRESENT = 'PRESENT', 'Present'
     LATE = 'LATE', 'Late'
     EXCUSED = 'EXCUSED', 'Excused'
+    CHEATING = 'CHEATING', 'Cheating / Invalid'
 
 
 class AttendanceSession(models.Model):
@@ -47,24 +48,27 @@ class AttendanceSession(models.Model):
         'groups.Group',
         on_delete=models.PROTECT,
         related_name='sessions',
+        null=True,
+        blank=True,
     )
     teacher = models.ForeignKey(
         'teachers.Teacher',
         on_delete=models.PROTECT,
         related_name='sessions',
     )
-    location = models.ForeignKey(
-        'locations.AttendanceLocation',
-        on_delete=models.PROTECT,
-        related_name='sessions',
-        null=True,
-        blank=True,
-    )
+    latitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    radius_meters = models.FloatField(default=50.0)
 
     status = models.CharField(
         max_length=20,
         choices=SessionStatus.choices,
         default=SessionStatus.ACTIVE,
+    )
+    session_type = models.CharField(
+        max_length=20,
+        choices=[('LECTURE', 'Lecture'), ('LAB', 'Lab'), ('TUTORIAL', 'Tutorial')],
+        default='LECTURE',
     )
 
     # Server-controlled timing

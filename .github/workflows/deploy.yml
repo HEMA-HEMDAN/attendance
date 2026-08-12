@@ -94,6 +94,7 @@ jobs:
             
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d
+            docker compose -f docker-compose.prod.yml exec -T web python manage.py migrate --noinput
             
             # Clean up dangling images to save space
             docker image prune -f

@@ -30,6 +30,8 @@ def broadcast_attendance_record(record):
                     'status': record.status,
                     'verified_at': record.verified_at.isoformat(),
                     'distance_from_location_meters': record.distance_from_location_meters,
+                    'submitted_latitude': float(record.submitted_latitude) if record.submitted_latitude else None,
+                    'submitted_longitude': float(record.submitted_longitude) if record.submitted_longitude else None,
                 },
             }
         )

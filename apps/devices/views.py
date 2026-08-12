@@ -17,6 +17,21 @@ class DeviceRegisterView(generics.CreateAPIView):
     serializer_class = DeviceRegistrationSerializer
 
     def create(self, request, *args, **kwargs):
+        student = request.user.student_profile
+        
+        # Check if the student has an active session
+        from apps.attendance.models import AttendanceSession, SessionStatus
+        has_active_session = AttendanceSession.objects.filter(
+            group=student.group,
+            status=SessionStatus.ACTIVE
+        ).exists()
+
+        if has_active_session:
+            return Response(
+                {'detail': 'Cannot register a new device while a live session is active for your group.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         serializer = self.get_serializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         device = serializer.save()

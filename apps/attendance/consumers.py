@@ -79,7 +79,7 @@ class AttendanceSessionConsumer(AsyncWebsocketConsumer):
         if user.role == 'ADMIN':
             return True
 
-        if user.role == 'TEACHER':
+        if user.role in ['DOCTOR', 'TEACHING_ASSISTANT']:
             return session.teacher.user_id == user.id
 
         return False

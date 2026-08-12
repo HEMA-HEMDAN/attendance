@@ -14,7 +14,9 @@ class AttendanceSessionSerializer(serializers.ModelSerializer):
     course_name = serializers.CharField(source='course.name', read_only=True)
     group_name = serializers.CharField(source='group.name', read_only=True)
     teacher_name = serializers.SerializerMethodField()
-    location_name = serializers.CharField(source='location.name', read_only=True, allow_null=True)
+    latitude = serializers.FloatField(read_only=True, allow_null=True)
+    longitude = serializers.FloatField(read_only=True, allow_null=True)
+    radius_meters = serializers.FloatField(read_only=True)
     present_count = serializers.SerializerMethodField()
     late_count = serializers.SerializerMethodField()
     total_enrolled = serializers.SerializerMethodField()
@@ -23,7 +25,7 @@ class AttendanceSessionSerializer(serializers.ModelSerializer):
         model = AttendanceSession
         fields = [
             'id', 'course', 'course_name', 'group', 'group_name',
-            'teacher_name', 'location', 'location_name',
+            'teacher_name', 'latitude', 'longitude', 'radius_meters',
             'status', 'starts_at', 'expires_at', 'closed_at',
             'biometric_required', 'location_required',
             'max_location_accuracy_meters', 'late_after_minutes', 'duration_minutes',
@@ -33,7 +35,8 @@ class AttendanceSessionSerializer(serializers.ModelSerializer):
         read_only_fields = [
             'id', 'status', 'starts_at', 'expires_at', 'closed_at',
             'created_at', 'course_name', 'group_name', 'teacher_name',
-            'location_name', 'present_count', 'late_count', 'total_enrolled',
+            'latitude', 'longitude', 'radius_meters',
+            'present_count', 'late_count', 'total_enrolled',
         ]
 
     def get_teacher_name(self, obj):
@@ -52,10 +55,11 @@ class AttendanceSessionSerializer(serializers.ModelSerializer):
 
 class SessionCreateSerializer(serializers.Serializer):
     course = serializers.PrimaryKeyRelatedField(queryset=Course.objects.none())
-    group = serializers.PrimaryKeyRelatedField(queryset=Group.objects.none())
-    location = serializers.PrimaryKeyRelatedField(
-        queryset=AttendanceLocation.objects.none(), required=False, allow_null=True
-    )
+    group = serializers.PrimaryKeyRelatedField(queryset=Group.objects.none(), required=False, allow_null=True)
+    session_type = serializers.ChoiceField(choices=[('LECTURE', 'Lecture'), ('LAB', 'Lab'), ('TUTORIAL', 'Tutorial')], default='LECTURE')
+    latitude = serializers.FloatField(required=False, allow_null=True)
+    longitude = serializers.FloatField(required=False, allow_null=True)
+    radius_meters = serializers.FloatField(default=50.0)
     duration_minutes = serializers.IntegerField(default=60, min_value=1, max_value=480)
     biometric_required = serializers.BooleanField(default=True)
     location_required = serializers.BooleanField(default=True)
@@ -73,27 +77,30 @@ class SessionCreateSerializer(serializers.Serializer):
             self.fields['group'].queryset = Group.objects.filter(
                 organization=org, status='ACTIVE'
             )
-            self.fields['location'].queryset = AttendanceLocation.objects.filter(
-                organization=org, status='ACTIVE'
-            )
 
     def validate(self, data):
-        # Validate the teacher is assigned to this course
         request = self.context['request']
-        if request.user.is_teacher:
-            teacher = request.user.teacher_profile
-            course = data['course']
-            if course.teacher != teacher:
-                raise serializers.ValidationError(
-                    'You are not assigned to this course'
-                )
-        # Validate the group is enrolled in the course
         course = data['course']
-        group = data['group']
-        if not course.groups.filter(pk=group.pk).exists():
-            raise serializers.ValidationError(
-                'This group is not enrolled in the selected course'
-            )
+        group = data.get('group')
+        session_type = data.get('session_type', 'LECTURE')
+
+        if session_type in ('LAB', 'TUTORIAL') and not group:
+            raise serializers.ValidationError({'group': f'Group is required for a {session_type} session.'})
+
+        if request.user.role == 'DOCTOR':
+            teacher = request.user.teacher_profile
+            if course.teacher != teacher:
+                raise serializers.ValidationError('You are not the assigned doctor for this course.')
+        elif request.user.role == 'TEACHING_ASSISTANT':
+            teacher = request.user.teacher_profile
+            if session_type == 'LECTURE':
+                raise serializers.ValidationError('Teaching Assistants cannot create Lecture sessions.')
+            if not group or group.teaching_assistant != teacher:
+                raise serializers.ValidationError('You are not the assigned teaching assistant for this group.')
+
+        if group and not course.groups.filter(pk=group.pk).exists():
+            raise serializers.ValidationError('This group is not enrolled in the selected course')
+            
         return data
 
     def create(self, validated_data):
@@ -139,6 +146,7 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
             'id', 'session', 'student', 'student_id', 'student_name',
             'status', 'verified_at',
             'location_accuracy_meters', 'distance_from_location_meters',
+            'submitted_latitude', 'submitted_longitude',
             'mock_location_detected', 'device_challenge_verified',
             'created_at',
         ]

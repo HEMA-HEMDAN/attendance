@@ -41,22 +41,41 @@ class Command(BaseCommand):
             admin_user.set_password('AdminPass123!')
             admin_user.save()
 
-        # Teacher
-        teacher_user, created = User.objects.get_or_create(
-            email='teacher@techuni.edu',
+        # Doctor
+        doctor_user, created = User.objects.get_or_create(
+            email='doctor@techuni.edu',
             defaults={
                 'first_name': 'Sarah',
                 'last_name': 'Connor',
-                'role': Role.TEACHER,
+                'role': Role.DOCTOR,
                 'organization': org,
             }
         )
         if created:
-            teacher_user.set_password('TeacherPass123!')
-            teacher_user.save()
+            doctor_user.set_password('DoctorPass123!')
+            doctor_user.save()
 
-        teacher_profile, _ = Teacher.objects.get_or_create(
-            user=teacher_user,
+        doctor_profile, _ = Teacher.objects.get_or_create(
+            user=doctor_user,
+            defaults={'organization': org}
+        )
+        
+        # Teaching Assistant
+        ta_user, created = User.objects.get_or_create(
+            email='ta@techuni.edu',
+            defaults={
+                'first_name': 'Mark',
+                'last_name': 'Johnson',
+                'role': Role.TEACHING_ASSISTANT,
+                'organization': org,
+            }
+        )
+        if created:
+            ta_user.set_password('TaPass123!')
+            ta_user.save()
+
+        ta_profile, _ = Teacher.objects.get_or_create(
+            user=ta_user,
             defaults={'organization': org}
         )
 
@@ -92,8 +111,13 @@ class Command(BaseCommand):
         group, _ = Group.objects.get_or_create(
             organization=org,
             name='CS-101 Class A',
-            defaults={'status': GroupStatus.ACTIVE}
+            defaults={
+                'status': GroupStatus.ACTIVE,
+                'teaching_assistant': ta_profile
+            }
         )
+        group.teaching_assistant = ta_profile
+        group.save()
 
         # Student Profiles
         student_profile1, _ = Student.objects.get_or_create(
@@ -102,6 +126,8 @@ class Command(BaseCommand):
                 'organization': org,
                 'student_id': 'STU-1001',
                 'group': group,
+                'department': 'Computer Science',
+                'academic_level': 1,
                 'status': StudentStatus.ACTIVE,
             }
         )
@@ -115,6 +141,8 @@ class Command(BaseCommand):
                 'organization': org,
                 'student_id': 'STU-1002',
                 'group': group,
+                'department': 'Computer Science',
+                'academic_level': 1,
                 'status': StudentStatus.ACTIVE,
             }
         )
@@ -128,23 +156,15 @@ class Command(BaseCommand):
             code='CS301',
             defaults={
                 'name': 'Mobile App Development',
-                'teacher': teacher_profile,
+                'teacher': doctor_profile,
+                'academic_year': '2026-2027',
+                'semester': 1,
+                'department': 'Computer Science',
+                'level': 3,
                 'status': CourseStatus.ACTIVE,
             }
         )
         course.groups.add(group)
-
-        # 5. Location
-        location, _ = AttendanceLocation.objects.get_or_create(
-            organization=org,
-            name='Main Campus Lab 3',
-            defaults={
-                'latitude': 30.0444210,
-                'longitude': 31.2357120,
-                'radius_meters': 500,
-                'status': LocationStatus.ACTIVE,
-            }
-        )
 
         # 6. Active Session
         now = timezone.now()
@@ -153,11 +173,13 @@ class Command(BaseCommand):
         session, created = AttendanceSession.objects.get_or_create(
             organization=org,
             course=course,
-            group=group,
             status=SessionStatus.ACTIVE,
             defaults={
-                'teacher': teacher_profile,
-                'location': location,
+                'teacher': doctor_profile,
+                'session_type': 'LECTURE',
+                'latitude': 30.0444210,
+                'longitude': 31.2357120,
+                'radius_meters': 500,
                 'starts_at': now,
                 'expires_at': expires,
                 'biometric_required': True,
@@ -176,6 +198,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS('Credentials for testing:'))
         self.stdout.write(self.style.SUCCESS('  Student 1 : student@techuni.edu / StudentPass123!'))
         self.stdout.write(self.style.SUCCESS('  Student 2 : student2@techuni.edu / StudentPass123!'))
-        self.stdout.write(self.style.SUCCESS('  Teacher   : teacher@techuni.edu / TeacherPass123!'))
+        self.stdout.write(self.style.SUCCESS('  Doctor    : doctor@techuni.edu / DoctorPass123!'))
+        self.stdout.write(self.style.SUCCESS('  TA        : ta@techuni.edu / TaPass123!'))
         self.stdout.write(self.style.SUCCESS('  Admin     : admin@techuni.edu   / AdminPass123!'))
         self.stdout.write(self.style.SUCCESS('============================================='))

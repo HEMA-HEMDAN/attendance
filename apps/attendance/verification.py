@@ -145,7 +145,7 @@ class AttendanceVerificationService:
         # ── 1. Get session ────────────────────────────────────────────
         try:
             session = AttendanceSession.objects.select_related(
-                'course', 'group', 'location', 'organization'
+                'course', 'group', 'organization'
             ).get(pk=session_id)
         except AttendanceSession.DoesNotExist:
             raise VerificationError('Session not found', 'SESSION_NOT_FOUND')
@@ -379,24 +379,24 @@ class AttendanceVerificationService:
                     AuditAction.LOCATION_FAILED,
                 )
 
-        if not session.location:
+        if session.latitude is None or session.longitude is None:
             # Session has no location requirement
             return None
 
         # Distance calculation (server-side)
         distance_m = haversine_distance(
-            session.location.latitude, session.location.longitude,
+            float(session.latitude), float(session.longitude),
             latitude, longitude,
         )
 
-        if distance_m > session.location.radius_meters:
+        if distance_m > session.radius_meters:
             audit(
                 action=AuditAction.LOCATION_FAILED,
                 actor=self.student.user,
                 organization=self.student.organization,
                 metadata={
                     'distance_m': round(distance_m, 1),
-                    'radius_m': session.location.radius_meters,
+                    'radius_m': session.radius_meters,
                     'mock': mock_location,
                 },
                 ip_address=self.request_ip,

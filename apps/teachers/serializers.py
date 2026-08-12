@@ -38,7 +38,7 @@ class TeacherCreateSerializer(serializers.Serializer):
                 password=password,
                 first_name=validated_data['first_name'],
                 last_name=validated_data['last_name'],
-                role=Role.TEACHER,
+                role=Role.DOCTOR,
                 organization=org,
             )
             teacher = Teacher.objects.create(user=user, organization=org)

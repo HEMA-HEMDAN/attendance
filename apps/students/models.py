@@ -38,6 +38,9 @@ class Student(models.Model):
         related_name='students',
     )
     phone = models.CharField(max_length=30, blank=True)
+    personal_email = models.EmailField(blank=True, null=True, help_text='Fallback Gmail for OTPs')
+    department = models.CharField(max_length=100, blank=True)
+    academic_level = models.CharField(max_length=50, blank=True, help_text='e.g. 1st Year')
     status = models.CharField(
         max_length=20,
         choices=StudentStatus.choices,

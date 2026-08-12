@@ -14,8 +14,10 @@ from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseU
 
 
 class Role(models.TextChoices):
+    SUPERADMIN = 'SUPERADMIN', 'Superadmin'
     ADMIN = 'ADMIN', 'Admin'
-    TEACHER = 'TEACHER', 'Teacher'
+    DOCTOR = 'DOCTOR', 'Doctor'
+    TEACHING_ASSISTANT = 'TEACHING_ASSISTANT', 'Teaching Assistant'
     STUDENT = 'STUDENT', 'Student'
 
 
@@ -45,7 +47,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True)
     first_name = models.CharField(max_length=150)
     last_name = models.CharField(max_length=150)
-    role = models.CharField(max_length=10, choices=Role.choices, default=Role.STUDENT)
+    role = models.CharField(max_length=20, choices=Role.choices, default=Role.STUDENT)
 
     organization = models.ForeignKey(
         'organizations.Organization',
@@ -85,7 +87,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     @property
     def is_teacher(self):
-        return self.role == Role.TEACHER
+        return self.role in (Role.DOCTOR, Role.TEACHING_ASSISTANT)
 
     @property
     def is_student(self):

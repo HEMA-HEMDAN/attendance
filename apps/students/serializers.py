@@ -23,7 +23,7 @@ class StudentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Student
         fields = [
-            'id', 'student_id', 'email', 'first_name', 'last_name',
+            'id', 'student_id', 'email', 'personal_email', 'first_name', 'last_name',
             'phone', 'status', 'group', 'group_name', 'is_active', 'created_at',
         ]
         read_only_fields = ['id', 'created_at', 'email', 'first_name', 'last_name', 'is_active']

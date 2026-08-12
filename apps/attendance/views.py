@@ -2,6 +2,7 @@
 
 import logging
 from django.utils import timezone
+from datetime import timedelta
 from rest_framework import generics, status, filters
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -45,7 +46,7 @@ class SessionListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         qs = AttendanceSession.objects.filter(
             organization=self.request.user.organization
-        ).select_related('course', 'group', 'teacher__user', 'location').order_by('-created_at')
+        ).select_related('course', 'group', 'teacher__user').order_by('-created_at')
 
         if self.request.user.is_teacher:
             qs = qs.filter(teacher__user=self.request.user)
@@ -65,8 +66,8 @@ class SessionListCreateView(generics.ListCreateAPIView):
             target_type='AttendanceSession',
             target_id=session.id,
             metadata={
-                'course': session.course.name,
-                'group': session.group.name,
+                'course': session.course.name if session.course else None,
+                'group': session.group.name if session.group else None,
             },
         )
 
@@ -102,9 +103,44 @@ class SessionCloseView(APIView):
             target_type='AttendanceSession',
             target_id=session.id,
         )
+        return Response({'detail': 'Session closed successfully'})
 
-        return Response(AttendanceSessionSerializer(session).data)
 
+class SessionReopenView(APIView):
+    """Teacher reopens their own closed session."""
+    permission_classes = [IsTeacher]
+
+    def post(self, request, pk):
+        try:
+            session = AttendanceSession.objects.get(
+                pk=pk,
+                teacher__user=request.user,
+                organization=request.user.organization,
+            )
+        except AttendanceSession.DoesNotExist:
+            return Response({'detail': 'Session not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if session.status != SessionStatus.CLOSED:
+            return Response(
+                {'detail': f'Session cannot be reopened because it is {session.status.lower()}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        session.status = SessionStatus.ACTIVE
+        session.closed_at = None
+        if timezone.now() > session.expires_at:
+            session.expires_at = timezone.now() + timedelta(minutes=session.duration_minutes)
+        
+        session.save(update_fields=['status', 'closed_at', 'expires_at'])
+
+        audit(
+            action=AuditAction.SESSION_REOPENED,
+            actor=request.user,
+            organization=request.user.organization,
+            target_type='AttendanceSession',
+            target_id=session.id,
+        )
+        return Response({'detail': 'Session reopened successfully'})
 
 class ChallengeRequestView(APIView):
     """
@@ -212,8 +248,8 @@ class ManualAttendanceOverrideView(APIView):
         if not student_id:
             return Response({'detail': 'student_id is required'}, status=status.HTTP_400_BAD_REQUEST)
 
-        if status_val not in ['PRESENT', 'LATE', 'EXCUSED']:
-            return Response({'detail': 'Invalid status. Must be PRESENT, LATE, or EXCUSED'}, status=status.HTTP_400_BAD_REQUEST)
+        if status_val not in ['PRESENT', 'LATE', 'EXCUSED', 'CHEATING']:
+            return Response({'detail': 'Invalid status. Must be PRESENT, LATE, EXCUSED, or CHEATING'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             session = AttendanceSession.objects.get(
@@ -291,7 +327,7 @@ class ActiveSessionsForStudentView(generics.ListAPIView):
             organization=student.organization,
             group=student.group,
             status=SessionStatus.ACTIVE,
-        ).select_related('course', 'group', 'teacher__user', 'location')
+        ).select_related('course', 'group', 'teacher__user')
 
 
 class DashboardView(APIView):
@@ -318,3 +354,72 @@ class DashboardView(APIView):
                 verified_at__date=today,
             ).count(),
         })
+
+
+class AttendanceExportView(APIView):
+    """Export attendance records to CSV for a course (or specific group)."""
+    permission_classes = [IsAdminOrTeacher]
+
+    def get(self, request):
+        import csv
+        from django.http import HttpResponse
+        from apps.students.models import Student
+
+        course_id = request.query_params.get('course_id')
+        group_id = request.query_params.get('group_id')
+        
+        if not course_id:
+            return Response({'detail': 'course_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        sessions = AttendanceSession.objects.filter(
+            course_id=course_id,
+            organization=request.user.organization,
+            status=SessionStatus.CLOSED
+        ).order_by('starts_at')
+        
+        if group_id:
+            sessions = sessions.filter(group_id=group_id)
+
+        # Get all students for this course/group
+        if group_id:
+            students = Student.objects.filter(group_id=group_id, organization=request.user.organization)
+        else:
+            students = Student.objects.filter(group__courses__id=course_id, organization=request.user.organization).distinct()
+
+        # Build records map: {student_id: {session_id: status}}
+        records = AttendanceRecord.objects.filter(
+            session__in=sessions,
+            student__in=students
+        )
+        
+        attendance_map = {}
+        for r in records:
+            if r.student_id not in attendance_map:
+                attendance_map[r.student_id] = {}
+            attendance_map[r.student_id][r.session_id] = r.status
+
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="attendance_export_course_{course_id}.csv"'
+        
+        writer = csv.writer(response)
+        
+        # Header row
+        header = ['Student ID', 'Name', 'Department', 'Level']
+        for s in sessions:
+            header.append(s.starts_at.strftime('%Y-%m-%d %H:%M'))
+        writer.writerow(header)
+        
+        for student in students:
+            row = [
+                student.student_id,
+                student.user.get_full_name(),
+                student.department,
+                student.academic_level,
+            ]
+            for s in sessions:
+                # If they have a record, use it, else 'ABSENT'
+                status_val = attendance_map.get(student.id, {}).get(s.id, 'ABSENT')
+                row.append(status_val)
+            writer.writerow(row)
+
+        return response

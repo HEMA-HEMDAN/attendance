@@ -15,6 +15,13 @@ class Group(models.Model):
         related_name='groups',
     )
     name = models.CharField(max_length=255)
+    teaching_assistant = models.ForeignKey(
+        'teachers.Teacher',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assigned_groups',
+    )
     status = models.CharField(
         max_length=20,
         choices=GroupStatus.choices,

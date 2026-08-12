@@ -26,11 +26,11 @@ class AttendanceRecordInline(admin.TabularInline):
 @admin.register(AttendanceSession)
 class AttendanceSessionAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
     list_display = [
-        'id', 'course', 'group', 'teacher',
+        'id', 'course', 'group', 'teacher', 'session_type',
         'status_badge', 'starts_at', 'expires_at',
         'present_count', 'late_count', 'total_enrolled',
     ]
-    list_filter = ['status', 'organization', 'course']
+    list_filter = ['status', 'organization', 'course', 'session_type']
     search_fields = ['course__name', 'group__name', 'teacher__user__email']
     readonly_fields = [
         'status', 'starts_at', 'expires_at', 'closed_at',
@@ -40,7 +40,8 @@ class AttendanceSessionAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
     actions = ['close_sessions']
 
     fieldsets = (
-        ('Session', {'fields': ('organization', 'course', 'group', 'teacher', 'location')}),
+        ('Session', {'fields': ('organization', 'course', 'group', 'teacher', 'session_type')}),
+        ('Location (Dynamic)', {'fields': ('latitude', 'longitude', 'radius_meters')}),
         ('Status & Timing', {'fields': ('status', 'starts_at', 'expires_at', 'closed_at', 'duration_minutes')}),
         ('Policy', {'fields': (
             'biometric_required', 'location_required',

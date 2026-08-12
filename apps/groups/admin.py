@@ -11,10 +11,15 @@ from .models import Group
 
 @admin.register(Group)
 class GroupAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
-    list_display = ['name', 'organization', 'status_badge', 'student_count', 'created_at']
+    list_display = ['name', 'organization', 'teaching_assistant', 'status_badge', 'student_count', 'created_at']
     list_filter = ['status', 'organization']
-    search_fields = ['name']
+    search_fields = ['name', 'teaching_assistant__user__email']
     readonly_fields = ['created_at', 'updated_at', 'student_count']
+    fieldsets = (
+        ('Basic', {'fields': ('organization', 'name', 'status')}),
+        ('Assignments', {'fields': ('teaching_assistant',)}),
+        ('Meta', {'fields': ('created_at', 'updated_at', 'student_count')}),
+    )
 
     def status_badge(self, obj):
         color = '#28a745' if obj.status == 'ACTIVE' else '#6c757d'

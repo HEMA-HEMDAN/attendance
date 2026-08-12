@@ -73,7 +73,9 @@ class AttendanceSessionAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
 
     def total_enrolled(self, obj):
         from apps.students.models import Student
-        return Student.objects.filter(group=obj.group, status='ACTIVE').count()
+        if obj.group:
+            return Student.objects.filter(enrollments__course=obj.course, enrollments__group=obj.group, status='ACTIVE').distinct().count()
+        return Student.objects.filter(enrollments__course=obj.course, status='ACTIVE').distinct().count()
     total_enrolled.short_description = 'Enrolled'
 
     def close_sessions(self, request, queryset):

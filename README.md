@@ -64,3 +64,15 @@ Alternatively, you can run a single command without entering the shell:
 ```bash
 docker exec -it attendance_web python manage.py createsuperuser
 ```
+
+## Wiping and Re-seeding the Database (Production)
+
+If you need to completely reset the production database and re-seed it with the initial demo data, you can run the following commands. **Warning: This will permanently delete all existing data.**
+
+```bash
+# 1. Flush the database (removes all data)
+docker exec -it attendance_web python manage.py flush --no-input
+
+# 2. Re-seed the data
+docker exec -it attendance_web python manage.py seed_data
+```

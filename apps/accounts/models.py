@@ -25,6 +25,12 @@ class UserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
         if not email:
             raise ValueError('Email is required')
+        if extra_fields.get('role') == Role.ADMIN:
+            extra_fields['is_staff'] = True
+            extra_fields['is_superuser'] = False
+        elif extra_fields.get('role') == Role.SUPERADMIN:
+            extra_fields['is_staff'] = True
+            extra_fields['is_superuser'] = True
         email = self.normalize_email(email)
         user = self.model(email=email, **extra_fields)
         user.set_password(password)
@@ -82,6 +88,15 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def get_full_name(self):
         return f'{self.first_name} {self.last_name}'.strip()
+
+    def save(self, *args, **kwargs):
+        if self.role == Role.ADMIN:
+            self.is_staff = True
+            self.is_superuser = False
+        elif self.role == Role.SUPERADMIN:
+            self.is_staff = True
+            self.is_superuser = True
+        super().save(*args, **kwargs)
 
     @property
     def is_superadmin(self):

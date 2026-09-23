@@ -37,6 +37,7 @@ class AdminUserFactory(DjangoModelFactory):
     role = Role.ADMIN
     organization = factory.SubFactory(OrganizationFactory)
     is_active = True
+    is_staff = True
 
     @classmethod
     def _create(cls, model_class, *args, **kwargs):

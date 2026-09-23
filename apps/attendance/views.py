@@ -21,11 +21,12 @@ from apps.audit.models import AuditAction
 from .models import AttendanceSession, AttendanceRecord, SessionStatus
 from .serializers import (
     AttendanceSessionSerializer, CheckInRequestSerializer, AttendanceRecordSerializer,
+    AdHocSessionStartSerializer,
 )
 from .verification import AttendanceVerificationService, VerificationError
 from .services import (
     get_doctor_today_work, get_ta_today_work, get_student_today_work,
-    open_occurrence_session, close_attendance_session,
+    open_occurrence_session, close_attendance_session, create_and_open_adhoc_session,
 )
 
 logger = logging.getLogger(__name__)
@@ -67,16 +68,15 @@ class TodayWorkView(APIView):
 class OpenOccurrenceSessionView(APIView):
     """
     Opens an attendance session for a scheduled SessionOccurrence.
-    Enforces role authorization:
-      Doctor → LECTURE
-      Teaching Assistant → LAB / TUTORIAL for assigned group
+    Enforces role authorization (Doctor / TA only) & automatic location capture payload.
     """
     permission_classes = [IsDoctorOrAssistant]
 
     def post(self, request, occurrence_id):
         lat = request.data.get('latitude')
         lng = request.data.get('longitude')
-        radius = float(request.data.get('radius_meters', 50.0))
+        accuracy = request.data.get('location_accuracy_meters') or request.data.get('accuracy_m')
+        captured_at = request.data.get('location_captured_at') or request.data.get('captured_at')
         duration = int(request.data.get('duration_minutes', 60))
         late_after = int(request.data.get('late_after_minutes', 15))
 
@@ -86,7 +86,8 @@ class OpenOccurrenceSessionView(APIView):
                 occurrence_id=occurrence_id,
                 latitude=lat,
                 longitude=lng,
-                radius_meters=radius,
+                location_accuracy_meters=accuracy,
+                location_captured_at=captured_at,
                 duration_minutes=duration,
                 late_after_minutes=late_after,
             )
@@ -94,19 +95,41 @@ class OpenOccurrenceSessionView(APIView):
             code = exc.args[1] if len(exc.args) > 1 else 'BAD_REQUEST'
             return Response({'detail': exc.args[0], 'code': code}, status=status.HTTP_400_BAD_REQUEST)
 
-        audit(
-            action=AuditAction.SESSION_CREATED,
-            actor=request.user,
-            organization=request.user.organization,
-            target_type='AttendanceSession',
-            target_id=session.id,
-            metadata={
-                'occurrence_id': occurrence_id,
-                'session_type': session.occurrence.session_type,
-            },
-        )
+        return Response(AttendanceSessionSerializer(session).data, status=status.HTTP_201_CREATED)
+
+
+class AdHocSessionStartView(APIView):
+    """
+    Creates an ad-hoc SessionOccurrence and opens its AttendanceSession atomically.
+    `POST /attendance/occurrences/ad-hoc/start/`
+    """
+    permission_classes = [IsDoctorOrAssistant]
+
+    def post(self, request):
+        serializer = AdHocSessionStartSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        data = serializer.validated_data
+        try:
+            session = create_and_open_adhoc_session(
+                user=request.user,
+                course_offering_id=data['course_offering_id'],
+                group_id=data.get('group_id'),
+                session_type=data.get('session_type', 'LECTURE'),
+                latitude=data.get('latitude'),
+                longitude=data.get('longitude'),
+                location_accuracy_meters=data.get('location_accuracy_meters'),
+                location_captured_at=data.get('location_captured_at'),
+                duration_minutes=int(request.data.get('duration_minutes', 60)),
+                late_after_minutes=int(request.data.get('late_after_minutes', 15)),
+            )
+        except ValueError as exc:
+            code = exc.args[1] if len(exc.args) > 1 else 'BAD_REQUEST'
+            return Response({'detail': exc.args[0], 'code': code}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(AttendanceSessionSerializer(session).data, status=status.HTTP_201_CREATED)
+
 
 
 class SessionCloseView(APIView):

@@ -15,7 +15,7 @@ class SessionOccurrenceSerializer(serializers.ModelSerializer):
         model = SessionOccurrence
         fields = [
             'id', 'schedule_id', 'course_offering_id', 'course_code', 'course_name',
-            'group_id', 'group_name', 'scheduled_date', 'starts_at', 'ends_at',
+            'group_id', 'group_name', 'occurrence_type', 'scheduled_date', 'starts_at', 'ends_at',
             'session_type', 'status',
         ]
 
@@ -25,15 +25,39 @@ class AttendanceSessionSerializer(serializers.ModelSerializer):
     course_name = serializers.CharField(source='occurrence.course_offering.course.name', read_only=True)
     group_name = serializers.CharField(source='occurrence.group.name', read_only=True, default=None)
     session_type = serializers.CharField(source='occurrence.session_type', read_only=True)
+    occurrence_type = serializers.CharField(source='occurrence.occurrence_type', read_only=True)
+    opened_by_name = serializers.CharField(source='opened_by.get_full_name', read_only=True)
+    opened_at = serializers.DateTimeField(source='starts_at', read_only=True)
 
     class Meta:
         model = AttendanceSession
         fields = [
             'id', 'occurrence_id', 'course_code', 'course_name', 'group_name',
-            'session_type', 'latitude', 'longitude', 'radius_meters',
-            'max_location_accuracy_meters', 'late_after_minutes', 'status',
+            'session_type', 'occurrence_type', 'opened_by', 'opened_by_name', 'opened_at',
+            'latitude', 'longitude', 'location_accuracy_meters', 'location_captured_at',
+            'radius_meters', 'max_location_accuracy_meters', 'late_after_minutes', 'status',
             'starts_at', 'expires_at', 'closed_at', 'created_at',
         ]
+
+
+class AdHocSessionStartSerializer(serializers.Serializer):
+    course_offering_id = serializers.IntegerField()
+    group_id = serializers.IntegerField(required=False, allow_null=True)
+    session_type = serializers.ChoiceField(choices=['LECTURE', 'LAB', 'TUTORIAL'], default='LECTURE')
+    latitude = serializers.FloatField()
+    longitude = serializers.FloatField()
+    accuracy_m = serializers.FloatField(required=False, allow_null=True)
+    location_accuracy_meters = serializers.FloatField(required=False, allow_null=True)
+    location_captured_at = serializers.CharField(required=False, allow_null=True)
+    captured_at = serializers.CharField(required=False, allow_null=True)
+
+    def validate(self, attrs):
+        if attrs.get('accuracy_m') is not None and not attrs.get('location_accuracy_meters'):
+            attrs['location_accuracy_meters'] = attrs['accuracy_m']
+        if attrs.get('captured_at') is not None and not attrs.get('location_captured_at'):
+            attrs['location_captured_at'] = attrs['captured_at']
+        return attrs
+
 
 
 class CheckInRequestSerializer(serializers.Serializer):

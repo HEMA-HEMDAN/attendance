@@ -12,6 +12,11 @@ from django.db import models
 from django.utils import timezone
 
 
+class OccurrenceType(models.TextChoices):
+    SCHEDULED = 'SCHEDULED', 'Scheduled'
+    AD_HOC = 'AD_HOC', 'Ad-Hoc'
+
+
 class SessionOccurrenceStatus(models.TextChoices):
     SCHEDULED = 'SCHEDULED', 'Scheduled'
     ACTIVE = 'ACTIVE', 'Active'
@@ -35,12 +40,19 @@ class AttendanceStatus(models.TextChoices):
 
 class SessionOccurrence(models.Model):
     """
-    A date-based instance of a Weekly Schedule.
-    Unique by (schedule, scheduled_date).
+    A date-based instance of a Weekly Schedule or an Ad-Hoc Session.
+    Unique by (schedule, scheduled_date) for scheduled occurrences.
     """
+    occurrence_type = models.CharField(
+        max_length=20,
+        choices=OccurrenceType.choices,
+        default=OccurrenceType.SCHEDULED,
+    )
     schedule = models.ForeignKey(
         'courses.Schedule',
         on_delete=models.CASCADE,
+        null=True,
+        blank=True,
         related_name='occurrences',
     )
     course_offering = models.ForeignKey(
@@ -78,11 +90,29 @@ class SessionOccurrence(models.Model):
             models.Index(fields=['course_offering', 'scheduled_date']),
             models.Index(fields=['group', 'scheduled_date']),
             models.Index(fields=['scheduled_date', 'status']),
+            models.Index(fields=['course_offering', 'occurrence_type']),
         ]
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    (models.Q(occurrence_type='SCHEDULED') & models.Q(schedule__isnull=False)) |
+                    (models.Q(occurrence_type='AD_HOC') & models.Q(schedule__isnull=True))
+                ),
+                name='valid_occurrence_schedule_constraint'
+            )
+        ]
+
+    def clean(self):
+        super().clean()
+        from django.core.exceptions import ValidationError
+        if self.occurrence_type == OccurrenceType.SCHEDULED and not self.schedule_id:
+            raise ValidationError({'schedule': 'Scheduled occurrences require a schedule.'})
+        if self.occurrence_type == OccurrenceType.AD_HOC and self.schedule_id:
+            raise ValidationError({'schedule': 'Ad-hoc occurrences cannot have a schedule.'})
 
     def __str__(self):
         group_str = f' / {self.group.name}' if self.group else ''
-        return f'{self.course_offering.course.code}{group_str} {self.session_type} on {self.scheduled_date}'
+        return f'{self.course_offering.course.code}{group_str} {self.session_type} on {self.scheduled_date} ({self.occurrence_type})'
 
 
 class AttendanceSession(models.Model):
@@ -108,6 +138,16 @@ class AttendanceSession(models.Model):
 
     latitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
     longitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    location_accuracy_meters = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Reported GPS accuracy of the opener's device (metres)",
+    )
+    location_captured_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when the opener's location was captured",
+    )
     radius_meters = models.FloatField(default=50.0)
     max_location_accuracy_meters = models.FloatField(
         default=50.0,
@@ -139,6 +179,10 @@ class AttendanceSession(models.Model):
 
     def __str__(self):
         return f'AttendanceSession {self.id} for Occurrence {self.occurrence_id} ({self.status})'
+
+    @property
+    def opened_at(self):
+        return self.starts_at
 
     def is_active(self):
         now = timezone.now()

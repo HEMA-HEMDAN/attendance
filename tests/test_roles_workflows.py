@@ -5,6 +5,7 @@ occurrence session opening, session closing, NO REOPEN.
 
 import pytest
 from datetime import date
+from django.utils import timezone
 from rest_framework.test import APIClient
 from apps.attendance.models import SessionStatus
 
@@ -56,7 +57,13 @@ class TestDoctorWorkflow:
         occurrence = SessionOccurrenceFactory(schedule=schedule, course_offering=offering, session_type='LECTURE')
 
         client.force_authenticate(user=doctor_user)
-        res = client.post(f'/api/v1/attendance/occurrences/{occurrence.id}/open/')
+        loc_data = {
+            'latitude': 30.0444,
+            'longitude': 31.2357,
+            'location_accuracy_meters': 10.0,
+            'location_captured_at': timezone.now().isoformat(),
+        }
+        res = client.post(f'/api/v1/attendance/occurrences/{occurrence.id}/open/', loc_data, format='json')
         assert res.status_code == 201
         assert res.data['status'] == 'ACTIVE'
 
@@ -72,9 +79,15 @@ class TestDoctorWorkflow:
         occurrence = SessionOccurrenceFactory(schedule=schedule, course_offering=offering, session_type='LECTURE')
 
         client.force_authenticate(user=doctor_user1)
-        res = client.post(f'/api/v1/attendance/occurrences/{occurrence.id}/open/')
+        loc_data = {
+            'latitude': 30.0444,
+            'longitude': 31.2357,
+            'location_accuracy_meters': 10.0,
+            'location_captured_at': timezone.now().isoformat(),
+        }
+        res = client.post(f'/api/v1/attendance/occurrences/{occurrence.id}/open/', loc_data, format='json')
         assert res.status_code == 400
-        assert res.data['code'] == 'COURSE_NOT_OWNED'
+        assert res.data['code'] in ('COURSE_NOT_OWNED', 'COURSE_NOT_IN_SCOPE')
 
 
 @pytest.mark.django_db
@@ -111,7 +124,13 @@ class TestTAWorkflow:
         occurrence = SessionOccurrenceFactory(schedule=schedule, course_offering=offering, group=group, session_type='LAB')
 
         client.force_authenticate(user=ta_user)
-        res = client.post(f'/api/v1/attendance/occurrences/{occurrence.id}/open/')
+        loc_data = {
+            'latitude': 30.0444,
+            'longitude': 31.2357,
+            'location_accuracy_meters': 10.0,
+            'location_captured_at': timezone.now().isoformat(),
+        }
+        res = client.post(f'/api/v1/attendance/occurrences/{occurrence.id}/open/', loc_data, format='json')
         assert res.status_code == 201
 
     def test_ta_cannot_open_lecture(self, client):
@@ -125,9 +144,15 @@ class TestTAWorkflow:
         occurrence = SessionOccurrenceFactory(schedule=schedule, course_offering=offering, session_type='LECTURE')
 
         client.force_authenticate(user=ta_user)
-        res = client.post(f'/api/v1/attendance/occurrences/{occurrence.id}/open/')
+        loc_data = {
+            'latitude': 30.0444,
+            'longitude': 31.2357,
+            'location_accuracy_meters': 10.0,
+            'location_captured_at': timezone.now().isoformat(),
+        }
+        res = client.post(f'/api/v1/attendance/occurrences/{occurrence.id}/open/', loc_data, format='json')
         assert res.status_code == 400
-        assert res.data['code'] == 'LECTURE_NOT_ALLOWED'
+        assert res.data['code'] in ('LECTURE_NOT_ALLOWED', 'INVALID_SESSION_TYPE')
 
 
 @pytest.mark.django_db

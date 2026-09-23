@@ -12,6 +12,7 @@ from django.http import HttpResponse
 from apps.accounts.admin import OrgScopedAdminMixin
 from apps.devices.models import Device
 from .models import Student, StudentStatus, StudentEnrollment
+from apps.accounts.admin import OrgScopedAdminMixin
 
 
 class DeviceInline(admin.TabularInline):
@@ -27,6 +28,7 @@ class DeviceInline(admin.TabularInline):
 
 @admin.register(Student)
 class StudentAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
+    related_org_fields = {'user': 'organization'}
     list_display = ['student_id', 'get_full_name', 'get_email', 'personal_email', 'department', 'academic_level', 'organization', 'status_badge']
     list_filter = ['status', 'organization', 'department', 'academic_level']
     search_fields = ['student_id', 'user__email', 'user__first_name', 'user__last_name', 'personal_email']
@@ -140,7 +142,13 @@ class StudentAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
 
 
 @admin.register(StudentEnrollment)
-class StudentEnrollmentAdmin(admin.ModelAdmin):
+class StudentEnrollmentAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
+    org_field = 'student__organization'
+    related_org_fields = {
+        'student': 'organization',
+        'course_offering': 'course__organization',
+        'group': 'course_offering__course__organization',
+    }
     list_display = ['student', 'course_offering', 'group', 'created_at']
     list_filter = ['course_offering', 'group']
     search_fields = ['student__student_id', 'student__user__email', 'course_offering__course__code']

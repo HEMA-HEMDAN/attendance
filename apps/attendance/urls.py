@@ -1,12 +1,13 @@
 from django.urls import path
 from .views import (
-    TodayWorkView, OpenOccurrenceSessionView, SessionCloseView, SessionDeleteView,
+    TodayWorkView, OpenOccurrenceSessionView, AdHocSessionStartView, SessionCloseView, SessionDeleteView,
     ChallengeRequestView, CheckInView, SessionRecordsView, ManualAttendanceOverrideView,
     StudentAttendanceHistoryView, SessionListCreateView,
 )
 
 urlpatterns = [
     path('today/', TodayWorkView.as_view(), name='attendance-today'),
+    path('occurrences/ad-hoc/start/', AdHocSessionStartView.as_view(), name='occurrence-adhoc-start'),
     path('occurrences/<int:occurrence_id>/open/', OpenOccurrenceSessionView.as_view(), name='occurrence-open'),
     path('sessions/', SessionListCreateView.as_view(), name='session-list'),
     path('sessions/<int:pk>/close/', SessionCloseView.as_view(), name='session-close'),

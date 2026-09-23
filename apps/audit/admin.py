@@ -5,6 +5,7 @@ Enhanced Audit admin — read-only event log with color-coded actions.
 from django.contrib import admin
 from django.utils.html import format_html
 from .models import AuditLog
+from apps.accounts.admin import OrgScopedAdminMixin
 
 
 ACTION_COLORS = {
@@ -26,7 +27,7 @@ ACTION_COLORS = {
 
 
 @admin.register(AuditLog)
-class AuditLogAdmin(admin.ModelAdmin):
+class AuditLogAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
     list_display = ['action_badge', 'actor', 'organization', 'target_type', 'target_id', 'ip_address', 'created_at']
     list_filter = ['action', 'organization']
     search_fields = ['actor__email', 'target_id', 'action']

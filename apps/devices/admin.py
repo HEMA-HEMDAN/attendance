@@ -12,6 +12,7 @@ from .models import Device
 
 @admin.register(Device)
 class DeviceAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
+    related_org_fields = {'student': 'organization'}
     list_display = [
         'student', 'platform', 'device_name',
         'status_badge', 'registered_at', 'last_seen_at', 'biometric_invalidated',

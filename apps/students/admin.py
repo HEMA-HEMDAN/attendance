@@ -141,6 +141,7 @@ class StudentAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
 
 @admin.register(StudentEnrollment)
 class StudentEnrollmentAdmin(admin.ModelAdmin):
-    list_display = ['student', 'course', 'group', 'created_at']
-    list_filter = ['course', 'group']
-    search_fields = ['student__student_id', 'student__user__email', 'course__code']
+    list_display = ['student', 'course_offering', 'group', 'created_at']
+    list_filter = ['course_offering', 'group']
+    search_fields = ['student__student_id', 'student__user__email', 'course_offering__course__code']
+

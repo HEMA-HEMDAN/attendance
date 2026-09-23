@@ -82,13 +82,25 @@ class User(AbstractBaseUser, PermissionsMixin):
         return f'{self.first_name} {self.last_name}'.strip()
 
     @property
-    def is_admin(self):
+    def is_superadmin(self):
+        return self.role == Role.SUPERADMIN
+
+    @property
+    def is_organization_admin(self):
         return self.role == Role.ADMIN
 
     @property
-    def is_teacher(self):
-        return self.role in (Role.DOCTOR, Role.TEACHING_ASSISTANT)
+    def is_doctor(self):
+        return self.role == Role.DOCTOR
+
+    @property
+    def is_teaching_assistant(self):
+        return self.role == Role.TEACHING_ASSISTANT
 
     @property
     def is_student(self):
         return self.role == Role.STUDENT
+
+    @property
+    def is_staff_member(self):
+        return self.role in (Role.SUPERADMIN, Role.ADMIN, Role.DOCTOR, Role.TEACHING_ASSISTANT)

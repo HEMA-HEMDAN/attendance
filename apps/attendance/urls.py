@@ -1,26 +1,19 @@
 from django.urls import path
 from .views import (
-    SessionListCreateView, SessionCloseView, SessionReopenView,
-    SessionDeleteView, ChallengeRequestView, CheckInView,
-    SessionRecordsView, ManualAttendanceOverrideView,
-    StudentAttendanceHistoryView, ActiveSessionsForStudentView,
-    DashboardView, AttendanceExportView,
+    TodayWorkView, OpenOccurrenceSessionView, SessionCloseView, SessionDeleteView,
+    ChallengeRequestView, CheckInView, SessionRecordsView, ManualAttendanceOverrideView,
+    StudentAttendanceHistoryView, SessionListCreateView,
 )
 
 urlpatterns = [
-    # Admin/Dashboard
-    path('dashboard/', DashboardView.as_view(), name='dashboard'),
-    path('export/', AttendanceExportView.as_view(), name='attendance-export'),
-
-    # Teacher session management
-    path('sessions/', SessionListCreateView.as_view(), name='session-list-create'),
+    path('today/', TodayWorkView.as_view(), name='attendance-today'),
+    path('occurrences/<int:occurrence_id>/open/', OpenOccurrenceSessionView.as_view(), name='occurrence-open'),
+    path('sessions/', SessionListCreateView.as_view(), name='session-list'),
     path('sessions/<int:pk>/close/', SessionCloseView.as_view(), name='session-close'),
-    path('sessions/<int:pk>/reopen/', SessionReopenView.as_view(), name='session-reopen'),
-    path('sessions/<int:pk>/delete/', SessionDeleteView.as_view(), name='session-delete'),
-    path('sessions/<int:session_id>/challenge/', ChallengeRequestView.as_view(), name='challenge-request'),
-    path('sessions/<int:session_id>/check-in/', CheckInView.as_view(), name='check-in'),
+    path('sessions/<int:pk>/', SessionDeleteView.as_view(), name='session-delete'),
+    path('sessions/<int:session_id>/challenge/', ChallengeRequestView.as_view(), name='session-challenge'),
+    path('sessions/<int:session_id>/checkin/', CheckInView.as_view(), name='session-checkin'),
     path('sessions/<int:pk>/records/', SessionRecordsView.as_view(), name='session-records'),
-    path('sessions/<int:pk>/manual-mark/', ManualAttendanceOverrideView.as_view(), name='manual-mark'),
-    path('student/history/', StudentAttendanceHistoryView.as_view(), name='student-history'),
-    path('student/active-sessions/', ActiveSessionsForStudentView.as_view(), name='active-sessions'),
+    path('sessions/<int:pk>/override/', ManualAttendanceOverrideView.as_view(), name='session-override'),
+    path('history/', StudentAttendanceHistoryView.as_view(), name='attendance-history'),
 ]

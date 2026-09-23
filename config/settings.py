@@ -42,12 +42,13 @@ INSTALLED_APPS = [
     'apps.accounts',
     'apps.organizations',
     'apps.students',
-    'apps.teachers',
+    'apps.staff',
     'apps.groups',
     'apps.courses',
     'apps.devices',
     'apps.locations',
     'apps.attendance',
+    'apps.analytics',
     'apps.audit',
 ]
 

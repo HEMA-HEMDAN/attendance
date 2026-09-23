@@ -16,6 +16,11 @@ class OrganizationStatus(models.TextChoices):
 class Organization(models.Model):
     name = models.CharField(max_length=255)
     slug = models.SlugField(unique=True, max_length=100)
+    timezone = models.CharField(
+        max_length=50,
+        default='Africa/Cairo',
+        help_text='Timezone name (e.g. Africa/Cairo, UTC, America/New_York)',
+    )
     status = models.CharField(
         max_length=20,
         choices=OrganizationStatus.choices,
@@ -29,3 +34,4 @@ class Organization(models.Model):
 
     def __str__(self):
         return self.name
+

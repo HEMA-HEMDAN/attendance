@@ -1,11 +1,8 @@
-"""Courses app — course management with teacher/group assignments."""
+"""
+Courses app — AcademicYear, Semester, Course, CourseOffering, Schedule, ScheduleException.
+"""
 
 from django.db import models
-
-
-class CourseStatus(models.TextChoices):
-    ACTIVE = 'ACTIVE', 'Active'
-    ARCHIVED = 'ARCHIVED', 'Archived'
 
 
 class SessionType(models.TextChoices):
@@ -14,35 +11,75 @@ class SessionType(models.TextChoices):
     TUTORIAL = 'TUTORIAL', 'Tutorial'
 
 
+class CourseOfferingStatus(models.TextChoices):
+    ACTIVE = 'ACTIVE', 'Active'
+    ARCHIVED = 'ARCHIVED', 'Archived'
+
+
+class ExceptionType(models.TextChoices):
+    CANCELLED = 'CANCELLED', 'Cancelled'
+    MOVED = 'MOVED', 'Moved'
+    SPECIAL = 'SPECIAL', 'Special'
+
+
+class AcademicYear(models.Model):
+    organization = models.ForeignKey(
+        'organizations.Organization',
+        on_delete=models.CASCADE,
+        related_name='academic_years',
+    )
+    name = models.CharField(max_length=100, help_text='e.g. 2026/2027')
+    start_date = models.DateField()
+    end_date = models.DateField()
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'academic_years'
+        unique_together = [('organization', 'name')]
+        ordering = ['-start_date']
+
+    def __str__(self):
+        return f'{self.name} ({self.organization.name})'
+
+
+class Semester(models.Model):
+    organization = models.ForeignKey(
+        'organizations.Organization',
+        on_delete=models.CASCADE,
+        related_name='semesters',
+    )
+    academic_year = models.ForeignKey(
+        AcademicYear,
+        on_delete=models.CASCADE,
+        related_name='semesters',
+    )
+    name = models.CharField(max_length=100, help_text='e.g. Fall, Spring, Summer')
+    start_date = models.DateField()
+    end_date = models.DateField()
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'semesters'
+        unique_together = [('academic_year', 'name')]
+        ordering = ['-start_date']
+
+    def __str__(self):
+        return f'{self.academic_year.name} — {self.name}'
+
+
 class Course(models.Model):
     organization = models.ForeignKey(
         'organizations.Organization',
         on_delete=models.CASCADE,
         related_name='courses',
     )
+    code = models.CharField(max_length=50)
     name = models.CharField(max_length=255)
-    code = models.CharField(max_length=50, blank=True)
-    teacher = models.ForeignKey(
-        'teachers.Teacher',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='courses',
-    )
-    groups = models.ManyToManyField(
-        'groups.Group',
-        related_name='courses',
-        blank=True,
-    )
-    academic_year = models.CharField(max_length=20, blank=True, help_text='e.g. 2026/2027')
-    semester = models.CharField(max_length=50, blank=True, help_text='e.g. Fall, Spring')
     department = models.CharField(max_length=100, blank=True)
-    level = models.CharField(max_length=50, blank=True, help_text='e.g. 1st Year, 2nd Year')
-    status = models.CharField(
-        max_length=20,
-        choices=CourseStatus.choices,
-        default=CourseStatus.ACTIVE,
-    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -50,17 +87,60 @@ class Course(models.Model):
         db_table = 'courses'
         unique_together = [('organization', 'code')]
         indexes = [
-            models.Index(fields=['organization', 'status']),
-            models.Index(fields=['teacher']),
+            models.Index(fields=['organization', 'code']),
         ]
 
     def __str__(self):
         return f'{self.code} — {self.name}'
 
 
-class Schedule(models.Model):
+class CourseOffering(models.Model):
     course = models.ForeignKey(
         Course,
+        on_delete=models.CASCADE,
+        related_name='offerings',
+    )
+    academic_year = models.ForeignKey(
+        AcademicYear,
+        on_delete=models.CASCADE,
+        related_name='course_offerings',
+    )
+    semester = models.ForeignKey(
+        Semester,
+        on_delete=models.CASCADE,
+        related_name='course_offerings',
+    )
+    doctor = models.ForeignKey(
+        'staff.Doctor',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='course_offerings',
+        help_text='Doctor owner of this course offering',
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=CourseOfferingStatus.choices,
+        default=CourseOfferingStatus.ACTIVE,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'course_offerings'
+        unique_together = [('course', 'academic_year', 'semester')]
+        indexes = [
+            models.Index(fields=['doctor', 'status']),
+            models.Index(fields=['academic_year', 'semester']),
+        ]
+
+    def __str__(self):
+        return f'{self.course.code} ({self.semester})'
+
+
+class Schedule(models.Model):
+    course_offering = models.ForeignKey(
+        CourseOffering,
         on_delete=models.CASCADE,
         related_name='schedules',
     )
@@ -70,6 +150,7 @@ class Schedule(models.Model):
         null=True,
         blank=True,
         related_name='schedules',
+        help_text='Required for LAB and TUTORIAL; null for LECTURE',
     )
     session_type = models.CharField(
         max_length=20,
@@ -86,15 +167,44 @@ class Schedule(models.Model):
     day_of_week = models.IntegerField(help_text='0=Monday, 6=Sunday')
     start_time = models.TimeField()
     end_time = models.TimeField()
-    
+    effective_from = models.DateField(null=True, blank=True)
+    effective_until = models.DateField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'schedules'
         indexes = [
-            models.Index(fields=['course', 'day_of_week']),
+            models.Index(fields=['course_offering', 'day_of_week', 'is_active']),
+            models.Index(fields=['group', 'day_of_week', 'is_active']),
         ]
 
     def __str__(self):
-        return f'{self.course.code} {self.session_type} on day {self.day_of_week}'
+        group_str = f' / {self.group.name}' if self.group else ''
+        return f'{self.course_offering.course.code}{group_str} {self.session_type} Day:{self.day_of_week}'
+
+
+class ScheduleException(models.Model):
+    schedule = models.ForeignKey(
+        Schedule,
+        on_delete=models.CASCADE,
+        related_name='exceptions',
+    )
+    date = models.DateField()
+    exception_type = models.CharField(
+        max_length=20,
+        choices=ExceptionType.choices,
+        default=ExceptionType.CANCELLED,
+    )
+    reason = models.CharField(max_length=255, blank=True)
+    new_start_time = models.TimeField(null=True, blank=True)
+    new_end_time = models.TimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'schedule_exceptions'
+        unique_together = [('schedule', 'date')]
+
+    def __str__(self):
+        return f'Exception {self.exception_type} for schedule {self.schedule_id} on {self.date}'

@@ -50,7 +50,7 @@ class CourseOfferingListCreateView(generics.ListCreateAPIView):
         user = self.request.user
         qs = CourseOffering.objects.filter(
             course__organization=user.organization
-        ).select_related('course', 'academic_year', 'semester', 'doctor__user')
+        ).select_related('course', 'academic_year', 'semester', 'doctor__user').order_by('id')
 
         if user.role == Role.DOCTOR:
             qs = qs.filter(doctor__user=user)

@@ -21,6 +21,8 @@ class SessionOccurrenceSerializer(serializers.ModelSerializer):
 
 
 class AttendanceSessionSerializer(serializers.ModelSerializer):
+    course_offering_id = serializers.IntegerField(source='occurrence.course_offering_id', read_only=True)
+    group_id = serializers.IntegerField(source='occurrence.group_id', read_only=True)
     course_code = serializers.CharField(source='occurrence.course_offering.course.code', read_only=True)
     course_name = serializers.CharField(source='occurrence.course_offering.course.name', read_only=True)
     group_name = serializers.CharField(source='occurrence.group.name', read_only=True, default=None)
@@ -32,7 +34,7 @@ class AttendanceSessionSerializer(serializers.ModelSerializer):
     class Meta:
         model = AttendanceSession
         fields = [
-            'id', 'occurrence_id', 'course_code', 'course_name', 'group_name',
+            'id', 'occurrence_id', 'course_offering_id', 'group_id', 'course_code', 'course_name', 'group_name',
             'session_type', 'occurrence_type', 'opened_by', 'opened_by_name', 'opened_at',
             'latitude', 'longitude', 'location_accuracy_meters', 'location_captured_at',
             'radius_meters', 'max_location_accuracy_meters', 'late_after_minutes', 'status',

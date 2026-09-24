@@ -87,6 +87,20 @@
             font-weight: 500;
         }
 
+        .logout-link {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 600;
+            padding: 6px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+        }
+
+        .logout-link:hover {
+            color: var(--text-main);
+        }
+
         main {
             flex: 1;
             padding: 32px;
@@ -358,7 +372,8 @@
         </div>
         <div class="user-info">
             <span class="role-badge">{{ user.role }}</span>
-            <span>{{ user.get_full_name }}</span>
+            <span>{{ user.full_name|default:user.get_full_name }}</span>
+            <a class="logout-link" href="{% url 'web-logout' %}">Logout</a>
         </div>
     </header>
 

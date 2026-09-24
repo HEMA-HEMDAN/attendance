@@ -160,90 +160,102 @@ from rest_framework.renderers import TemplateHTMLRenderer, JSONRenderer
 from rest_framework.permissions import IsAuthenticated
 
 
+def _query_value(request, key):
+    if hasattr(request, 'query_params'):
+        return request.query_params.get(key)
+    return request.GET.get(key)
+
+
+def build_analytics_dashboard_context(request):
+    """Role-scoped dashboard context used by both JWT API and Django session web views."""
+    user = request.user
+    svc = AnalyticsService(organization=user.organization if user.role != Role.SUPERADMIN else None)
+
+    year_id = _query_value(request, 'academic_year_id')
+    sem_id = _query_value(request, 'semester_id')
+    offering_id = _query_value(request, 'course_offering_id')
+    group_id = _query_value(request, 'group_id')
+    sess_type = _query_value(request, 'session_type')
+
+    doc_id = None
+    ta_id = None
+
+    role_details = []
+
+    if user.role == Role.DOCTOR:
+        doc = Doctor.objects.filter(user=user, organization=user.organization).first()
+        if doc:
+            doc_id = doc.id
+            offerings = doc.course_offerings.filter(status='ACTIVE').select_related('course')
+            for o in offerings:
+                m = svc.calculate_metrics(course_offering_id=o.id, doctor_id=doc.id)
+                role_details.append({
+                    'name': f"{o.course.code} — {o.course.name}",
+                    'metrics': m,
+                })
+    elif user.role == Role.TEACHING_ASSISTANT:
+        ta = TeachingAssistant.objects.filter(user=user, organization=user.organization).first()
+        if ta:
+            ta_id = ta.id
+            assigned_groups = ta.assigned_groups.filter(status='ACTIVE').select_related('course_offering__course')
+            for g in assigned_groups:
+                m = svc.calculate_metrics(group_id=g.id, ta_id=ta.id)
+                role_details.append({
+                    'name': f"{g.course_offering.course.code} ({g.name})",
+                    'metrics': m,
+                })
+    elif user.role in [Role.ADMIN, Role.SUPERADMIN]:
+        from apps.courses.models import CourseOffering
+        offerings = CourseOffering.objects.filter(
+            course__organization=user.organization if user.role != Role.SUPERADMIN else None,
+            status='ACTIVE'
+        ).select_related('course') if user.organization or user.role == Role.SUPERADMIN else []
+        for o in offerings:
+            m = svc.calculate_metrics(course_offering_id=o.id)
+            role_details.append({
+                'name': f"{o.course.code} — {o.course.name}",
+                'metrics': m,
+            })
+
+    metrics = svc.calculate_metrics(
+        academic_year_id=year_id,
+        semester_id=sem_id,
+        course_offering_id=offering_id,
+        group_id=group_id,
+        session_type=sess_type,
+        doctor_id=doc_id,
+        ta_id=ta_id,
+    )
+
+    filter_options = svc.get_filter_options(user=user)
+
+    user_dict = {
+        'id': user.id,
+        'email': user.email,
+        'full_name': user.get_full_name(),
+        'role': user.role,
+        'get_full_name': user.get_full_name(),
+    }
+
+    return {
+        'user': user_dict,
+        'metrics': metrics,
+        'role_details': role_details,
+        'filter_options': filter_options,
+    }
+
+
 class AnalyticsDashboardWebView(APIView):
     """
-    Unified Web Dashboard View for DOCTOR, TEACHING_ASSISTANT, ADMIN, SUPERADMIN.
-    Renders the professional HTML template with role-scoped data & filters.
+    JWT/API dashboard for DOCTOR, TEACHING_ASSISTANT, ADMIN, SUPERADMIN.
+    Browser session access is served by AnalyticsDashboardPage at /analytics/dashboard/.
     """
     permission_classes = [IsAuthenticated]
     renderer_classes = [TemplateHTMLRenderer, JSONRenderer]
     template_name = 'analytics/dashboard.html'
 
     def get(self, request):
-        user = request.user
-        svc = AnalyticsService(organization=user.organization if user.role != Role.SUPERADMIN else None)
-
-        year_id = request.query_params.get('academic_year_id')
-        sem_id = request.query_params.get('semester_id')
-        offering_id = request.query_params.get('course_offering_id')
-        group_id = request.query_params.get('group_id')
-        sess_type = request.query_params.get('session_type')
-
-        doc_id = None
-        ta_id = None
-
-        role_details = []
-
-        if user.role == Role.DOCTOR:
-            doc = Doctor.objects.filter(user=user, organization=user.organization).first()
-            if doc:
-                doc_id = doc.id
-                offerings = doc.course_offerings.filter(status='ACTIVE').select_related('course')
-                for o in offerings:
-                    m = svc.calculate_metrics(course_offering_id=o.id, doctor_id=doc.id)
-                    role_details.append({
-                        'name': f"{o.course.code} — {o.course.name}",
-                        'metrics': m,
-                    })
-        elif user.role == Role.TEACHING_ASSISTANT:
-            ta = TeachingAssistant.objects.filter(user=user, organization=user.organization).first()
-            if ta:
-                ta_id = ta.id
-                assigned_groups = ta.assigned_groups.filter(status='ACTIVE').select_related('course_offering__course')
-                for g in assigned_groups:
-                    m = svc.calculate_metrics(group_id=g.id, ta_id=ta.id)
-                    role_details.append({
-                        'name': f"{g.course_offering.course.code} ({g.name})",
-                        'metrics': m,
-                    })
-        elif user.role in [Role.ADMIN, Role.SUPERADMIN]:
-            from apps.courses.models import CourseOffering
-            offerings = CourseOffering.objects.filter(
-                course__organization=user.organization if user.role != Role.SUPERADMIN else None,
-                status='ACTIVE'
-            ).select_related('course') if user.organization or user.role == Role.SUPERADMIN else []
-            for o in offerings:
-                m = svc.calculate_metrics(course_offering_id=o.id)
-                role_details.append({
-                    'name': f"{o.course.code} — {o.course.name}",
-                    'metrics': m,
-                })
-
-        metrics = svc.calculate_metrics(
-            academic_year_id=year_id,
-            semester_id=sem_id,
-            course_offering_id=offering_id,
-            group_id=group_id,
-            session_type=sess_type,
-            doctor_id=doc_id,
-            ta_id=ta_id,
-        )
-
-        filter_options = svc.get_filter_options(user=user)
-
-        user_dict = {
-            'id': user.id,
-            'email': user.email,
-            'full_name': user.get_full_name(),
-            'role': user.role,
-        }
-
-        context = {
-            'user': user_dict,
-            'metrics': metrics,
-            'role_details': role_details,
-            'filter_options': filter_options,
-        }
+        context = build_analytics_dashboard_context(request)
 
         if request.accepted_renderer.format == 'html' or 'text/html' in request.META.get('HTTP_ACCEPT', ''):
             return render(request, self.template_name, context)

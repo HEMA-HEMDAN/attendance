@@ -2,9 +2,11 @@
 Accounts app — custom User model with role-based access.
 
 Roles:
-  ADMIN   — Organization administrator
-  TEACHER — Teacher within an organization
-  STUDENT — Student within an organization
+  SUPERADMIN         — System administrator
+  ADMIN              — Organization administrator
+  DOCTOR             — Doctor (Course Owner)
+  TEACHING_ASSISTANT — Teaching Assistant
+  STUDENT            — Student within an organization
 
 All users belong to exactly one organization.
 """
@@ -25,6 +27,12 @@ class UserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
         if not email:
             raise ValueError('Email is required')
+        if extra_fields.get('role') == Role.ADMIN:
+            extra_fields['is_staff'] = True
+            extra_fields['is_superuser'] = False
+        elif extra_fields.get('role') == Role.SUPERADMIN:
+            extra_fields['is_staff'] = True
+            extra_fields['is_superuser'] = True
         email = self.normalize_email(email)
         user = self.model(email=email, **extra_fields)
         user.set_password(password)
@@ -34,7 +42,9 @@ class UserManager(BaseUserManager):
     def create_superuser(self, email, password=None, **extra_fields):
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
-        extra_fields.setdefault('role', Role.ADMIN)
+        extra_fields.setdefault('role', Role.SUPERADMIN)
+        extra_fields.setdefault('first_name', 'Super')
+        extra_fields.setdefault('last_name', 'Admin')
         return self.create_user(email, password, **extra_fields)
 
 
@@ -81,14 +91,35 @@ class User(AbstractBaseUser, PermissionsMixin):
     def get_full_name(self):
         return f'{self.first_name} {self.last_name}'.strip()
 
+    def save(self, *args, **kwargs):
+        if self.role == Role.ADMIN:
+            self.is_staff = True
+            self.is_superuser = False
+        elif self.role == Role.SUPERADMIN:
+            self.is_staff = True
+            self.is_superuser = True
+        super().save(*args, **kwargs)
+
     @property
-    def is_admin(self):
+    def is_superadmin(self):
+        return self.role == Role.SUPERADMIN
+
+    @property
+    def is_organization_admin(self):
         return self.role == Role.ADMIN
 
     @property
-    def is_teacher(self):
-        return self.role in (Role.DOCTOR, Role.TEACHING_ASSISTANT)
+    def is_doctor(self):
+        return self.role == Role.DOCTOR
+
+    @property
+    def is_teaching_assistant(self):
+        return self.role == Role.TEACHING_ASSISTANT
 
     @property
     def is_student(self):
         return self.role == Role.STUDENT
+
+    @property
+    def is_staff_member(self):
+        return self.role in (Role.SUPERADMIN, Role.ADMIN, Role.DOCTOR, Role.TEACHING_ASSISTANT)

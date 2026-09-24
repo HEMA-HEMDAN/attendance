@@ -44,7 +44,11 @@ class StudentListCreateView(generics.ListCreateAPIView):
         if group_id:
             qs = qs.filter(enrollments__group_id=group_id)
 
-        return qs
+        course_offering_id = self.request.query_params.get('course_offering')
+        if course_offering_id:
+            qs = qs.filter(enrollments__course_offering_id=course_offering_id)
+
+        return qs.distinct()
 
     def create(self, request, *args, **kwargs):
         serializer = StudentCreateSerializer(data=request.data, context={'request': request})

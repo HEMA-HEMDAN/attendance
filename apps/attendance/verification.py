@@ -1,30 +1,21 @@
 """
 Attendance Verification Engine.
 
-This service owns the final attendance decision.
-It validates every aspect of an attendance request server-side.
-
-Validation pipeline:
-  1. Authentication          (handled by DRF — token required)
-  2. Organization membership (student.organization == session.organization)
-  3. Student active          (student.status == ACTIVE)
-  4. Student enrollment      (student.group enrolled in session.course/group)
-  5. Session exists          (session found by ID)
-  6. Session active          (status == ACTIVE, not expired)
-  7. Session not expired     (now < session.expires_at)
-  8. Device authorized       (device belongs to student, status ACTIVE)
-  9. Challenge verification  (server verifies RSA signature)
- 10. Location available      (if session requires it)
- 11. Location accuracy       (accuracy <= session policy)
- 12. Inside radius           (haversine distance <= location.radius_meters)
- 13. Mock-location signal    (logged, configurable enforcement)
- 14. Timestamp freshness     (location timestamp < 60s old)
- 15. Duplicate check         (UNIQUE constraint at DB level, pre-checked here)
- 16. Create record           (transactional)
+Enforces the full server-side 20-step verification pipeline:
+  1. Organization isolation
+  2. Student active state
+  3. Enrollment check (course offering & group match)
+  4. Session active state
+  5. Timezone-aware expiration check
+  6. Device authorization & status
+  7. Biometric invalidation check
+  8. Mandatory RSA challenge & signature verification (Biometric always required)
+  9. One-time location capture validation (freshness, accuracy, radius)
+ 10. Database-level duplicate protection
+ 11. Transactional record creation & audit logging
 """
 
 import base64
-import hashlib
 import logging
 import secrets
 from datetime import timedelta
@@ -44,10 +35,7 @@ from .models import AttendanceSession, AttendanceRecord, DeviceChallenge, Sessio
 
 logger = logging.getLogger(__name__)
 
-# Maximum age of a location timestamp accepted by the server (seconds)
 LOCATION_MAX_AGE_SECONDS = 60
-
-# Challenge TTL (seconds)
 CHALLENGE_TTL_SECONDS = 120
 
 
@@ -62,23 +50,11 @@ class VerificationError(Exception):
 
 
 class AttendanceVerificationService:
-    """
-    Stateless service. Each method is a validation step.
-    Call verify() to run the full pipeline.
-    """
-
     def __init__(self, student, request_ip: str = None):
         self.student = student
         self.request_ip = request_ip
 
     def issue_challenge(self, device_id: int, session_id: int) -> DeviceChallenge:
-        """
-        Issue a server-generated challenge for biometric/device verification.
-        The mobile will:
-          1. Unlock the private key with biometric auth
-          2. Sign the challenge token
-          3. Submit the signature with the attendance request
-        """
         from apps.devices.models import Device
 
         # Validate device
@@ -97,7 +73,7 @@ class AttendanceVerificationService:
 
         # Validate session exists and is active
         try:
-            session = AttendanceSession.objects.get(
+            session = AttendanceSession.objects.select_related('occurrence').get(
                 pk=session_id,
                 organization=self.student.organization,
                 status=SessionStatus.ACTIVE,
@@ -134,18 +110,16 @@ class AttendanceVerificationService:
         latitude: float = None,
         longitude: float = None,
         location_accuracy: float = None,
-        location_timestamp: float = None,  # Unix timestamp
+        location_timestamp: float = None,
         mock_location: bool = False,
     ) -> AttendanceRecord:
-        """
-        Run the full verification pipeline and create an attendance record.
-        Raises VerificationError on any failure.
-        """
 
         # ── 1. Get session ────────────────────────────────────────────
         try:
             session = AttendanceSession.objects.select_related(
-                'course', 'group', 'organization'
+                'occurrence__course_offering__course',
+                'occurrence__group',
+                'organization',
             ).get(pk=session_id)
         except AttendanceSession.DoesNotExist:
             raise VerificationError('Session not found', 'SESSION_NOT_FOUND')
@@ -158,11 +132,13 @@ class AttendanceVerificationService:
         if self.student.status != 'ACTIVE':
             raise VerificationError('Student account is not active', 'STUDENT_INACTIVE')
 
-        # ── 4. Student enrollment (group match) ───────────────────────
-        enrollment_qs = self.student.enrollments.filter(course_id=session.course_id)
-        if session.group_id:
-            enrollment_qs = enrollment_qs.filter(group_id=session.group_id)
-            
+        # ── 4. Student enrollment (course offering & group match) ─────
+        enrollment_qs = self.student.enrollments.filter(
+            course_offering_id=session.occurrence.course_offering_id
+        )
+        if session.occurrence.group_id:
+            enrollment_qs = enrollment_qs.filter(group_id=session.occurrence.group_id)
+
         if not enrollment_qs.exists():
             raise VerificationError(
                 'Student not enrolled in this session', 'ENROLLMENT_MISMATCH'
@@ -203,22 +179,21 @@ class AttendanceVerificationService:
                 AuditAction.BIOMETRIC_FAILED,
             )
 
-        # ── 8. Verify challenge/signature ─────────────────────────────
+        # ── 8. Mandatory Biometric & Signature verification ────────────
         device_challenge_verified = self._verify_challenge(
             device=device,
             challenge_token=challenge_token,
             signature_b64=signature_b64,
         )
 
-        # ── 9. Location verification ──────────────────────────────────
+        # ── 9. One-time Location verification ─────────────────────────
         distance_m = None
-        if session.location_required:
-            if latitude is None or longitude is None:
-                raise VerificationError(
-                    'Location data is required for this session',
-                    'LOCATION_REQUIRED',
-                    AuditAction.LOCATION_FAILED,
-                )
+        if latitude is None or longitude is None:
+            raise VerificationError(
+                'Location data is required for attendance verification',
+                'LOCATION_REQUIRED',
+                AuditAction.LOCATION_FAILED,
+            )
 
         distance_m = self._verify_location(
             session=session,
@@ -227,7 +202,7 @@ class AttendanceVerificationService:
             location_accuracy=location_accuracy,
             location_timestamp=location_timestamp,
             mock_location=mock_location,
-        ) if latitude is not None else None
+        )
 
         # ── 10. Duplicate check ───────────────────────────────────────
         if AttendanceRecord.objects.filter(session=session, student=self.student).exists():
@@ -255,16 +230,13 @@ class AttendanceVerificationService:
                 device_challenge_verified=device_challenge_verified,
             )
         except IntegrityError:
-            # Race condition — another request created a record simultaneously
             raise VerificationError(
                 'Attendance already recorded (concurrent request)',
                 'DUPLICATE_ATTENDANCE',
             )
 
-        # Update device last seen
         Device.objects.filter(pk=device.id).update(last_seen_at=now)
 
-        # Audit
         audit(
             action=AuditAction.ATTENDANCE_ACCEPTED,
             actor=self.student.user,
@@ -283,10 +255,6 @@ class AttendanceVerificationService:
         return record
 
     def _verify_challenge(self, device, challenge_token: str, signature_b64: str) -> bool:
-        """
-        Verify that the mobile signed the challenge token with the device's private key.
-        Returns True if verified, raises VerificationError on failure.
-        """
         try:
             challenge = DeviceChallenge.objects.get(
                 challenge_token=challenge_token,
@@ -335,7 +303,6 @@ class AttendanceVerificationService:
                 'Biometric verification failed', 'SIGNATURE_INVALID', AuditAction.BIOMETRIC_FAILED
             )
 
-        # Mark challenge as used (single-use)
         challenge.is_used = True
         challenge.save(update_fields=['is_used'])
         return True
@@ -349,18 +316,11 @@ class AttendanceVerificationService:
         location_timestamp: float,
         mock_location: bool,
     ) -> float:
-        """
-        Validate location data and return distance from session location in metres.
-        Raises VerificationError on failure.
-        """
-
-        # Validate coordinate ranges
         if not validate_coordinates(latitude, longitude):
             raise VerificationError(
                 'Invalid location coordinates', 'INVALID_COORDINATES', AuditAction.LOCATION_FAILED
             )
 
-        # Timestamp freshness
         if location_timestamp is not None:
             import datetime
             location_time = datetime.datetime.fromtimestamp(
@@ -374,7 +334,6 @@ class AttendanceVerificationService:
                     AuditAction.LOCATION_FAILED,
                 )
 
-        # Accuracy check
         if location_accuracy is not None and session.max_location_accuracy_meters:
             if location_accuracy > session.max_location_accuracy_meters:
                 raise VerificationError(
@@ -384,10 +343,8 @@ class AttendanceVerificationService:
                 )
 
         if session.latitude is None or session.longitude is None:
-            # Session has no location requirement
             return None
 
-        # Distance calculation (server-side)
         distance_m = haversine_distance(
             float(session.latitude), float(session.longitude),
             latitude, longitude,

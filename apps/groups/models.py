@@ -1,4 +1,4 @@
-"""Groups app — organizational groupings of students."""
+"""Groups app — sections/groups under course offerings."""
 
 from django.db import models
 
@@ -9,14 +9,14 @@ class GroupStatus(models.TextChoices):
 
 
 class Group(models.Model):
-    organization = models.ForeignKey(
-        'organizations.Organization',
+    course_offering = models.ForeignKey(
+        'courses.CourseOffering',
         on_delete=models.CASCADE,
         related_name='groups',
     )
-    name = models.CharField(max_length=255)
+    name = models.CharField(max_length=100, help_text='e.g. Group A, Section 1')
     teaching_assistant = models.ForeignKey(
-        'teachers.Teacher',
+        'staff.TeachingAssistant',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -32,10 +32,11 @@ class Group(models.Model):
 
     class Meta:
         db_table = 'groups'
-        unique_together = [('organization', 'name')]
+        unique_together = [('course_offering', 'name')]
         indexes = [
-            models.Index(fields=['organization', 'status']),
+            models.Index(fields=['course_offering', 'status']),
+            models.Index(fields=['teaching_assistant']),
         ]
 
     def __str__(self):
-        return f'{self.organization.name} / {self.name}'
+        return f'{self.course_offering.course.code} — {self.name}'

@@ -2,20 +2,30 @@
 Attendance app.
 
 Core models:
-  AttendanceSession — a single attendance event (created by a teacher)
-  AttendanceRecord  — a single student's attendance within a session
-
-Security invariants enforced here:
-  - UNIQUE(session, student) prevents duplicate records at DB level
-  - Server controls all timestamps (no client-provided attendance time)
-  - Verification metadata is stored for auditing without storing biometric data
+  SessionOccurrence — a date-specific occurrence derived from a Weekly Schedule
+  AttendanceSession — 1-to-1 operational session opened for an occurrence
+  AttendanceRecord  — a single student's attendance record
+  DeviceChallenge   — short-lived cryptographic challenge token
 """
 
 from django.db import models
 from django.utils import timezone
 
 
+class OccurrenceType(models.TextChoices):
+    SCHEDULED = 'SCHEDULED', 'Scheduled'
+    AD_HOC = 'AD_HOC', 'Ad-Hoc'
+
+
+class SessionOccurrenceStatus(models.TextChoices):
+    SCHEDULED = 'SCHEDULED', 'Scheduled'
+    ACTIVE = 'ACTIVE', 'Active'
+    COMPLETED = 'COMPLETED', 'Completed'
+    CANCELLED = 'CANCELLED', 'Cancelled'
+
+
 class SessionStatus(models.TextChoices):
+    SCHEDULED = 'SCHEDULED', 'Scheduled'
     ACTIVE = 'ACTIVE', 'Active'
     CLOSED = 'CLOSED', 'Closed'
     EXPIRED = 'EXPIRED', 'Expired'
@@ -28,58 +38,117 @@ class AttendanceStatus(models.TextChoices):
     CHEATING = 'CHEATING', 'Cheating / Invalid'
 
 
-class AttendanceSession(models.Model):
+class SessionOccurrence(models.Model):
     """
-    An attendance session is created by a teacher for a specific course+group.
-    The server controls timing — client clocks are not trusted.
+    A date-based instance of a Weekly Schedule or an Ad-Hoc Session.
+    Unique by (schedule, scheduled_date) for scheduled occurrences.
     """
-
-    organization = models.ForeignKey(
-        'organizations.Organization',
-        on_delete=models.CASCADE,
-        related_name='sessions',
+    occurrence_type = models.CharField(
+        max_length=20,
+        choices=OccurrenceType.choices,
+        default=OccurrenceType.SCHEDULED,
     )
-    course = models.ForeignKey(
-        'courses.Course',
-        on_delete=models.PROTECT,
-        related_name='sessions',
+    schedule = models.ForeignKey(
+        'courses.Schedule',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='occurrences',
+    )
+    course_offering = models.ForeignKey(
+        'courses.CourseOffering',
+        on_delete=models.CASCADE,
+        related_name='occurrences',
     )
     group = models.ForeignKey(
         'groups.Group',
-        on_delete=models.PROTECT,
-        related_name='sessions',
+        on_delete=models.CASCADE,
         null=True,
         blank=True,
+        related_name='occurrences',
     )
-    teacher = models.ForeignKey(
-        'teachers.Teacher',
-        on_delete=models.PROTECT,
-        related_name='sessions',
-    )
-    name = models.CharField(max_length=255, blank=True, null=True, help_text="Optional session name or topic")
-    latitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
-    longitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
-    radius_meters = models.FloatField(default=50.0)
-
-    status = models.CharField(
-        max_length=20,
-        choices=SessionStatus.choices,
-        default=SessionStatus.ACTIVE,
-    )
+    scheduled_date = models.DateField()
+    starts_at = models.DateTimeField()
+    ends_at = models.DateTimeField()
     session_type = models.CharField(
         max_length=20,
         choices=[('LECTURE', 'Lecture'), ('LAB', 'Lab'), ('TUTORIAL', 'Tutorial')],
         default='LECTURE',
     )
+    status = models.CharField(
+        max_length=20,
+        choices=SessionOccurrenceStatus.choices,
+        default=SessionOccurrenceStatus.SCHEDULED,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
-    # Server-controlled timing
-    starts_at = models.DateTimeField(default=timezone.now)
-    expires_at = models.DateTimeField()
-    closed_at = models.DateTimeField(null=True, blank=True)
+    class Meta:
+        db_table = 'session_occurrences'
+        unique_together = [('schedule', 'scheduled_date')]
+        indexes = [
+            models.Index(fields=['course_offering', 'scheduled_date']),
+            models.Index(fields=['group', 'scheduled_date']),
+            models.Index(fields=['scheduled_date', 'status']),
+            models.Index(fields=['course_offering', 'occurrence_type']),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    (models.Q(occurrence_type='SCHEDULED') & models.Q(schedule__isnull=False)) |
+                    (models.Q(occurrence_type='AD_HOC') & models.Q(schedule__isnull=True))
+                ),
+                name='valid_occurrence_schedule_constraint'
+            )
+        ]
 
-    # Session policy — configurable per session
-    biometric_required = models.BooleanField(default=True)
-    location_required = models.BooleanField(default=True)
+    def clean(self):
+        super().clean()
+        from django.core.exceptions import ValidationError
+        if self.occurrence_type == OccurrenceType.SCHEDULED and not self.schedule_id:
+            raise ValidationError({'schedule': 'Scheduled occurrences require a schedule.'})
+        if self.occurrence_type == OccurrenceType.AD_HOC and self.schedule_id:
+            raise ValidationError({'schedule': 'Ad-hoc occurrences cannot have a schedule.'})
+
+    def __str__(self):
+        group_str = f' / {self.group.name}' if self.group else ''
+        return f'{self.course_offering.course.code}{group_str} {self.session_type} on {self.scheduled_date} ({self.occurrence_type})'
+
+
+class AttendanceSession(models.Model):
+    """
+    Operational attendance session created for a single SessionOccurrence.
+    1-to-1 relationship with SessionOccurrence. NO REOPEN.
+    """
+    occurrence = models.OneToOneField(
+        SessionOccurrence,
+        on_delete=models.CASCADE,
+        related_name='attendance_session',
+    )
+    organization = models.ForeignKey(
+        'organizations.Organization',
+        on_delete=models.CASCADE,
+        related_name='sessions',
+    )
+    opened_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.PROTECT,
+        related_name='opened_sessions',
+    )
+
+    latitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    location_accuracy_meters = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Reported GPS accuracy of the opener's device (metres)",
+    )
+    location_captured_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when the opener's location was captured",
+    )
+    radius_meters = models.FloatField(default=50.0)
     max_location_accuracy_meters = models.FloatField(
         default=50.0,
         help_text='Reject location data with accuracy worse than this value (metres)',
@@ -88,7 +157,16 @@ class AttendanceSession(models.Model):
         default=15,
         help_text='Minutes after session start after which attendance is LATE',
     )
-    duration_minutes = models.PositiveIntegerField(default=60)
+
+    status = models.CharField(
+        max_length=20,
+        choices=SessionStatus.choices,
+        default=SessionStatus.ACTIVE,
+    )
+
+    starts_at = models.DateTimeField(default=timezone.now)
+    expires_at = models.DateTimeField()
+    closed_at = models.DateTimeField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -96,12 +174,15 @@ class AttendanceSession(models.Model):
         db_table = 'attendance_sessions'
         indexes = [
             models.Index(fields=['organization', 'status']),
-            models.Index(fields=['course', 'group']),
             models.Index(fields=['expires_at']),
         ]
 
     def __str__(self):
-        return f'Session {self.id} — {self.course} / {self.group} ({self.status})'
+        return f'AttendanceSession {self.id} for Occurrence {self.occurrence_id} ({self.status})'
+
+    @property
+    def opened_at(self):
+        return self.starts_at
 
     def is_active(self):
         now = timezone.now()
@@ -110,10 +191,9 @@ class AttendanceSession(models.Model):
 
 class AttendanceRecord(models.Model):
     """
-    A single student's attendance within a session.
-    UNIQUE(session, student) enforced at DB level to prevent duplicates.
+    A single student's attendance record within a session.
+    UNIQUE(session, student) enforced at DB level.
     """
-
     session = models.ForeignKey(
         AttendanceSession,
         on_delete=models.PROTECT,
@@ -138,27 +218,20 @@ class AttendanceRecord(models.Model):
         default=AttendanceStatus.PRESENT,
     )
 
-    # Server-assigned timestamp — client timestamp is NOT used for the record
     verified_at = models.DateTimeField(auto_now_add=True)
 
-    # Location verification metadata (stored for audit, not for re-verification)
     submitted_latitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
     submitted_longitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
     location_accuracy_meters = models.FloatField(null=True, blank=True)
     distance_from_location_meters = models.FloatField(null=True, blank=True)
 
-    # Signals (not hard blockers for all policies, but stored for audit)
     mock_location_detected = models.BooleanField(default=False)
-
-    # Biometric/device verification metadata
-    # We store whether the challenge was verified — NOT any biometric data
-    device_challenge_verified = models.BooleanField(default=False)
+    device_challenge_verified = models.BooleanField(default=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = 'attendance_records'
-        # CRITICAL: database-level duplicate protection
         unique_together = [('session', 'student')]
         indexes = [
             models.Index(fields=['session', 'status']),
@@ -172,16 +245,8 @@ class AttendanceRecord(models.Model):
 
 class DeviceChallenge(models.Model):
     """
-    A server-generated challenge for biometric/device verification.
-    Short-lived (TTL enforced in verification service).
-
-    Flow:
-      1. Student requests challenge  -> server creates DeviceChallenge
-      2. Mobile signs with private key after biometric auth
-      3. Server verifies signature against stored public key
-      4. Server marks challenge as used (single-use)
+    Short-lived cryptographic challenge token.
     """
-
     device = models.ForeignKey(
         'devices.Device',
         on_delete=models.CASCADE,

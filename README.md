@@ -3,6 +3,7 @@
 Django backend for the Bio Attendance system.
 
 ## Quick Start
+i may need to make a script to automate this 
 
 ```bash
 cd server

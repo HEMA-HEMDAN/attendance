@@ -1,25 +1,56 @@
-"""
-Enhanced Courses admin with group assignments.
-"""
-
 from django.contrib import admin
 from apps.accounts.admin import OrgScopedAdminMixin
-from .models import Course
+from .models import AcademicYear, Semester, Course, CourseOffering, Schedule, ScheduleException
+
+
+@admin.register(AcademicYear)
+class AcademicYearAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
+    list_display = ['name', 'organization', 'start_date', 'end_date', 'is_active']
+    list_filter = ['organization', 'is_active']
+
+
+@admin.register(Semester)
+class SemesterAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
+    list_display = ['name', 'academic_year', 'organization', 'start_date', 'end_date', 'is_active']
+    list_filter = ['academic_year', 'is_active']
 
 
 @admin.register(Course)
 class CourseAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
-    list_display = ['name', 'code', 'teacher', 'department', 'level', 'organization', 'status', 'group_list']
-    list_filter = ['status', 'organization', 'academic_year', 'semester', 'department', 'level']
-    filter_horizontal = ['groups']
-    search_fields = ['name', 'code', 'department']
-    readonly_fields = ['created_at', 'updated_at']
-    fieldsets = (
-        ('Basic Info', {'fields': ('organization', 'name', 'code', 'teacher', 'status')}),
-        ('Academic Structure', {'fields': ('academic_year', 'semester', 'department', 'level')}),
-        ('Groups', {'fields': ('groups',)}),
-    )
+    list_display = ['code', 'name', 'department', 'organization']
+    list_filter = ['organization', 'department']
+    search_fields = ['code', 'name']
 
-    def group_list(self, obj):
-        return ', '.join(obj.groups.values_list('name', flat=True)) or '—'
-    group_list.short_description = 'Groups'
+
+@admin.register(CourseOffering)
+class CourseOfferingAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
+    org_field = 'course__organization'
+    related_org_fields = {
+        'course': 'organization',
+        'academic_year': 'organization',
+        'semester': 'organization',
+        'doctor': 'organization',
+    }
+    list_display = ['course', 'academic_year', 'semester', 'doctor', 'status']
+    list_filter = ['academic_year', 'semester', 'status']
+    search_fields = ['course__code', 'course__name']
+
+
+@admin.register(Schedule)
+class ScheduleAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
+    org_field = 'course_offering__course__organization'
+    related_org_fields = {
+        'course_offering': 'course__organization',
+        'group': 'course_offering__course__organization',
+        'location': 'organization',
+    }
+    list_display = ['course_offering', 'group', 'session_type', 'day_of_week', 'start_time', 'end_time', 'is_active']
+    list_filter = ['session_type', 'day_of_week', 'is_active']
+
+
+@admin.register(ScheduleException)
+class ScheduleExceptionAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
+    org_field = 'schedule__course_offering__course__organization'
+    related_org_fields = {'schedule': 'course_offering__course__organization'}
+    list_display = ['schedule', 'date', 'exception_type', 'reason']
+    list_filter = ['exception_type', 'date']

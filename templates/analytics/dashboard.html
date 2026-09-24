@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Academic Attendance Analytics — University Attendance Platform</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0b1c30;
+            --bg-card: #132238;
+            --bg-input: #1a2d47;
+            --primary-accent: #0051d5;
+            --primary-light: #316bf3;
+            --text-main: #f8f9ff;
+            --text-muted: #8e9bb0;
+            --border-color: rgba(255, 255, 255, 0.08);
+            --success: #00be83;
+            --warning: #f5a623;
+            --danger: #ff4d4f;
+            --info: #1890ff;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            background-color: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            padding: 16px 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .header-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand-logo {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--primary-accent), var(--primary-light));
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 18px;
+        }
+
+        .brand-title {
+            font-size: 18px;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .role-badge {
+            background-color: rgba(0, 81, 213, 0.2);
+            color: var(--primary-light);
+            border: 1px solid rgba(0, 81, 213, 0.4);
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .logout-link {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 600;
+            padding: 6px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+        }
+
+        .logout-link:hover {
+            color: var(--text-main);
+        }
+
+        main {
+            flex: 1;
+            padding: 32px;
+            max-width: 1400px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .page-header {
+            margin-bottom: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+
+        .page-title {
+            font-size: 26px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .page-subtitle {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        /* Filter Panel */
+        .filter-panel {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 28px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: flex-end;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            flex: 1;
+            min-width: 160px;
+        }
+
+        .filter-label {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .filter-select, .filter-input {
+            background-color: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-main);
+            padding: 10px 14px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .filter-select:focus, .filter-input:focus {
+            border-color: var(--primary-light);
+        }
+
+        .btn-apply {
+            background: linear-gradient(135deg, var(--primary-accent), var(--primary-light));
+            border: none;
+            color: white;
+            padding: 10px 24px;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            height: 42px;
+        }
+
+        .btn-apply:hover {
+            opacity: 0.9;
+        }
+
+        /* Metrics Cards Grid */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+            margin-bottom: 28px;
+        }
+
+        .metric-card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background-color: var(--primary-light);
+        }
+
+        .metric-card.success::before { background-color: var(--success); }
+        .metric-card.warning::before { background-color: var(--warning); }
+        .metric-card.danger::before { background-color: var(--danger); }
+        .metric-card.info::before { background-color: var(--info); }
+
+        .metric-label {
+            font-size: 13px;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .metric-value {
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        .metric-sub {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        /* Section Cards */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 28px;
+            margin-bottom: 28px;
+        }
+
+        @media (max-width: 1024px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .section-card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 24px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Tables */
+        .table-responsive {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 14px;
+        }
+
+        .data-table th {
+            padding: 12px 16px;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border-color);
+            font-weight: 500;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .data-table td {
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .data-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .progress-bar-container {
+            width: 100%;
+            height: 8px;
+            background-color: var(--bg-input);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 4px;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary-accent), var(--primary-light));
+            border-radius: 4px;
+        }
+
+        .progress-bar-fill.success { background: var(--success); }
+        .progress-bar-fill.warning { background: var(--warning); }
+        .progress-bar-fill.danger { background: var(--danger); }
+
+        .empty-state {
+            padding: 40px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        /* Simple Bar Chart Visualization */
+        .chart-container {
+            display: flex;
+            align-items: flex-end;
+            gap: 16px;
+            height: 200px;
+            padding-top: 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .chart-bar-group {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100%;
+            justify-content: flex-end;
+        }
+
+        .chart-bar {
+            width: 100%;
+            max-width: 40px;
+            background: linear-gradient(180deg, var(--primary-light), var(--primary-accent));
+            border-radius: 4px 4px 0 0;
+            transition: height 0.3s;
+            min-height: 4px;
+        }
+
+        .chart-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 8px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-brand">
+            <div class="brand-logo">U</div>
+            <div class="brand-title">UniAttend Analytics</div>
+        </div>
+        <div class="user-info">
+            <span class="role-badge">{{ user.role }}</span>
+            <span>{{ user.full_name|default:user.get_full_name }}</span>
+            <a class="logout-link" href="{% url 'web-logout' %}">Logout</a>
+        </div>
+    </header>
+
+    <main>
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">Attendance & Performance Dashboard</h1>
+                <p class="page-subtitle">Real-time PostgreSQL analytics and attendance trend aggregations</p>
+            </div>
+        </div>
+
+        <!-- Filter Form -->
+        <form method="GET" action="" class="filter-panel">
+            <div class="filter-group">
+                <label class="filter-label">Academic Year</label>
+                <select name="academic_year_id" class="filter-select">
+                    <option value="">All Academic Years</option>
+                    {% for item in filter_options.academic_years %}
+                        <option value="{{ item.id }}" {% if request.GET.academic_year_id == item.id|stringformat:"i" %}selected{% endif %}>{{ item.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label class="filter-label">Semester</label>
+                <select name="semester_id" class="filter-select">
+                    <option value="">All Semesters</option>
+                    {% for item in filter_options.semesters %}
+                        <option value="{{ item.id }}" {% if request.GET.semester_id == item.id|stringformat:"i" %}selected{% endif %}>{{ item.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label class="filter-label">Course Offering</label>
+                <select name="course_offering_id" class="filter-select">
+                    <option value="">All Courses</option>
+                    {% for item in filter_options.course_offerings %}
+                        <option value="{{ item.id }}" {% if request.GET.course_offering_id == item.id|stringformat:"i" %}selected{% endif %}>{{ item.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label class="filter-label">Section / Group</label>
+                <select name="group_id" class="filter-select">
+                    <option value="">All Groups</option>
+                    {% for item in filter_options.groups %}
+                        <option value="{{ item.id }}" {% if request.GET.group_id == item.id|stringformat:"i" %}selected{% endif %}>{{ item.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label class="filter-label">Session Type</label>
+                <select name="session_type" class="filter-select">
+                    <option value="">All Types</option>
+                    {% for item in filter_options.session_types %}
+                        <option value="{{ item.id }}" {% if request.GET.session_type == item.id %}selected{% endif %}>{{ item.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label class="filter-label">Student Search</label>
+                <input name="search" class="filter-input" value="{{ request.GET.search|default:'' }}" placeholder="Name or student ID">
+            </div>
+
+            <div class="filter-group">
+                <label class="filter-label">Date From</label>
+                <input type="date" name="date_from" class="filter-input" value="{{ request.GET.date_from|default:'' }}">
+            </div>
+
+            <div class="filter-group">
+                <label class="filter-label">Date To</label>
+                <input type="date" name="date_to" class="filter-input" value="{{ request.GET.date_to|default:'' }}">
+            </div>
+
+            <button type="submit" class="btn-apply">Apply Filters</button>
+        </form>
+
+        <!-- Metrics Overview Grid -->
+        <div class="cards-grid">
+            <div class="metric-card success">
+                <span class="metric-label">Attendance Rate</span>
+                <span class="metric-value">{{ metrics.attendance_percentage }}%</span>
+                <span class="metric-sub">Present + Late Attendance</span>
+            </div>
+
+            <div class="metric-card info">
+                <span class="metric-label">Present Count</span>
+                <span class="metric-value">{{ metrics.present_count }}</span>
+                <span class="metric-sub">Verified attendance</span>
+            </div>
+
+            <div class="metric-card warning">
+                <span class="metric-label">Late Count</span>
+                <span class="metric-value">{{ metrics.late_count }}</span>
+                <span class="metric-sub">{{ metrics.late_percentage }}% late rate</span>
+            </div>
+
+            <div class="metric-card danger">
+                <span class="metric-label">Derived Absences</span>
+                <span class="metric-value">{{ metrics.derived_absent_count }}</span>
+                <span class="metric-sub">Completed sessions w/o check-in</span>
+            </div>
+
+            <div class="metric-card danger">
+                <span class="metric-label">Cheating / Invalid</span>
+                <span class="metric-value">{{ metrics.cheating_count }}</span>
+                <span class="metric-sub">Flagged/rejected records</span>
+            </div>
+
+            <div class="metric-card info">
+                <span class="metric-label">Total Sessions</span>
+                <span class="metric-value">{{ metrics.total_sessions }}</span>
+                <span class="metric-sub">Matching filter scope</span>
+            </div>
+        </div>
+
+        <div class="dashboard-grid">
+            <!-- Weekly Attendance Trends -->
+            <div class="section-card">
+                <div class="section-title">
+                    <span>Weekly Attendance Trend</span>
+                </div>
+                {% if metrics.weekly_trends %}
+                    <div class="chart-container">
+                        {% for week in metrics.weekly_trends %}
+                            <div class="chart-bar-group">
+                                <div class="chart-bar" style="height: {{ week.attendance_percentage }}%;"></div>
+                                <span class="chart-label">{{ week.week_start }}<br><b>{{ week.attendance_percentage }}%</b></span>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="empty-state">No weekly trend data available for the current filter selection.</div>
+                {% endif %}
+            </div>
+
+            <!-- Session Type Breakdown -->
+            <div class="section-card">
+                <div class="section-title">
+                    <span>Session Type Breakdown</span>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 16px;">
+                    <div>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 14px;">
+                            <span>Lectures</span>
+                            <span><b>{{ metrics.session_type_breakdown.LECTURE.attendance_percentage }}%</b> ({{ metrics.session_type_breakdown.LECTURE.present }} present)</span>
+                        </div>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar-fill success" style="width: {{ metrics.session_type_breakdown.LECTURE.attendance_percentage }}%;"></div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 14px;">
+                            <span>Labs</span>
+                            <span><b>{{ metrics.session_type_breakdown.LAB.attendance_percentage }}%</b> ({{ metrics.session_type_breakdown.LAB.present }} present)</span>
+                        </div>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar-fill" style="width: {{ metrics.session_type_breakdown.LAB.attendance_percentage }}%;"></div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 14px;">
+                            <span>Tutorials</span>
+                            <span><b>{{ metrics.session_type_breakdown.TUTORIAL.attendance_percentage }}%</b> ({{ metrics.session_type_breakdown.TUTORIAL.present }} present)</span>
+                        </div>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar-fill warning" style="width: {{ metrics.session_type_breakdown.TUTORIAL.attendance_percentage }}%;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Role Specific Course / Group Table -->
+        <div class="section-card">
+            <div class="section-title">
+                <span>Academic Scope Breakdowns</span>
+            </div>
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Scope Name</th>
+                            <th>Total Sessions</th>
+                            <th>Present</th>
+                            <th>Late</th>
+                            <th>Excused</th>
+                            <th>Cheating</th>
+                            <th>Derived Absent</th>
+                            <th>Attendance %</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if role_details %}
+                            {% for row in role_details %}
+                                <tr>
+                                    <td><b>{{ row.name }}</b></td>
+                                    <td>{{ row.metrics.total_sessions }}</td>
+                                    <td>{{ row.metrics.present_count }}</td>
+                                    <td>{{ row.metrics.late_count }}</td>
+                                    <td>{{ row.metrics.excused_count }}</td>
+                                    <td>{{ row.metrics.cheating_count }}</td>
+                                    <td>{{ row.metrics.derived_absent_count }}</td>
+                                    <td>
+                                        <b>{{ row.metrics.attendance_percentage }}%</b>
+                                        <div class="progress-bar-container">
+                                            <div class="progress-bar-fill {% if row.metrics.attendance_percentage >= 75 %}success{% elif row.metrics.attendance_percentage >= 50 %}warning{% else %}danger{% endif %}" style="width: {{ row.metrics.attendance_percentage }}%;"></div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="8" class="empty-state">No sub-scope records found for the current user authorization.</td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="section-card">
+            <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
+                <span>Students</span>
+                <a class="logout-link" href="/api/v1/analytics/export/course/{% if student_export_query %}?{{ student_export_query }}{% endif %}">Export Excel</a>
+            </div>
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Student</th>
+                            <th>Student ID</th>
+                            <th>Group</th>
+                            <th>Present</th>
+                            <th>Late</th>
+                            <th>Excused</th>
+                            <th>Cheating</th>
+                            <th>Absent</th>
+                            <th>Attendance Rate</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in student_rows %}
+                            <tr>
+                                <td><b><a href="{% url 'analytics-student-detail' row.student_pk %}">{{ row.student_name }}</a></b></td>
+                                <td>{{ row.student_id }}</td>
+                                <td>{{ row.group }}</td>
+                                <td>{{ row.present }}</td>
+                                <td>{{ row.late }}</td>
+                                <td>{{ row.excused }}</td>
+                                <td>{{ row.cheating }}</td>
+                                <td>{{ row.absent }}</td>
+                                <td><b>{{ row.attendance_rate }}%</b></td>
+                            </tr>
+                        {% empty %}
+                            <tr><td colspan="9" class="empty-state">No enrolled students match this authorized filter scope.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="section-card">
+            <div class="section-title"><span>Sessions</span></div>
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead><tr><th>Date</th><th>Course</th><th>Group</th><th>Type</th><th>Status</th><th>Details</th></tr></thead>
+                    <tbody>
+                        {% for row in session_rows %}
+                            <tr><td>{{ row.date }}</td><td>{{ row.course }} — {{ row.course_name }}</td><td>{{ row.group }}</td><td>{{ row.session_type }}</td><td>{{ row.status }}</td><td><a href="{% url 'analytics-session-attendance-web' row.session_id %}">Open attendance</a></td></tr>
+                        {% empty %}
+                            <tr><td colspan="6" class="empty-state">No sessions match this authorized filter scope.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+</body>
+</html>

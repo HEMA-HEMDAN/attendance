@@ -8,13 +8,7 @@ Covers: students, teachers, groups, courses, devices, locations,
 
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from django.utils.html import format_html
-from django.urls import path
-from django.shortcuts import redirect, render
-from django.contrib import messages
-from django.http import HttpResponse
-import csv
-import io
+from django.contrib.auth.models import Group
 
 from .models import User
 
@@ -26,17 +20,60 @@ class OrgScopedAdminMixin:
     """
 
     org_field = 'organization'
+    related_org_fields = {}
 
-    def get_queryset(self, request):
+    def _organization_queryset(self, request):
         qs = super().get_queryset(request)
         if request.user.is_superuser:
             return qs
         return qs.filter(**{self.org_field: request.user.organization})
 
+    def get_queryset(self, request):
+        return self._organization_queryset(request)
+
     def save_model(self, request, obj, form, change):
         if not request.user.is_superuser and not change:
             setattr(obj, self.org_field, request.user.organization)
         super().save_model(request, obj, form, change)
+
+    def has_view_permission(self, request, obj=None):
+        if not super().has_view_permission(request, obj):
+            return False
+        return request.user.is_superuser or (
+            request.user.role == 'ADMIN' and
+            request.user.organization_id is not None and
+            (obj is None or obj in self.get_queryset(request))
+        )
+
+    def has_change_permission(self, request, obj=None):
+        if not super().has_change_permission(request, obj):
+            return False
+        return request.user.is_superuser or (
+            request.user.role == 'ADMIN' and
+            request.user.organization_id is not None and
+            (obj is None or obj in self.get_queryset(request))
+        )
+
+    def has_delete_permission(self, request, obj=None):
+        if not super().has_delete_permission(request, obj):
+            return False
+        return request.user.is_superuser or (
+            request.user.role == 'ADMIN' and
+            request.user.organization_id is not None and
+            (obj is None or obj in self.get_queryset(request))
+        )
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        formfield = super().formfield_for_foreignkey(db_field, request, **kwargs)
+        if request.user.is_superuser or not hasattr(formfield, 'queryset'):
+            return formfield
+        model = db_field.remote_field.model
+        if any(field.name == 'organization' for field in model._meta.fields):
+            formfield.queryset = formfield.queryset.filter(organization=request.user.organization)
+        lookup = self.related_org_fields.get(db_field.name)
+        if lookup:
+            formfield.queryset = formfield.queryset.filter(**{lookup: request.user.organization})
+        return formfield
 
 
 @admin.register(User)
@@ -66,3 +103,30 @@ class UserAdmin(BaseUserAdmin):
         if request.user.is_superuser:
             return qs
         return qs.filter(organization=request.user.organization)
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    has_add_permission = has_view_permission
+    has_change_permission = has_view_permission
+    has_delete_permission = has_view_permission
+
+
+try:
+    admin.site.unregister(Group)
+except admin.sites.NotRegistered:
+    pass
+
+
+@admin.register(Group)
+class PlatformGroupAdmin(admin.ModelAdmin):
+    def has_module_permission(self, request):
+        return request.user.is_superuser
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    has_add_permission = has_view_permission
+    has_change_permission = has_view_permission
+    has_delete_permission = has_view_permission
+

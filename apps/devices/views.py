@@ -2,8 +2,9 @@ from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.utils import timezone
+from django.db.models import Q
 
-from apps.accounts.permissions import IsStudent, IsOrganizationAdmin
+from apps.accounts.permissions import IsStudent, IsOrganizationAdmin, IsAdmin
 from apps.audit.service import audit
 from apps.audit.models import AuditAction
 
@@ -19,25 +20,27 @@ class DeviceRegisterView(generics.CreateAPIView):
     def create(self, request, *args, **kwargs):
         student = request.user.student_profile
         
-        # Check if the student has an active session
+        # Check if student has an active session for an enrolled course offering or group
         from apps.attendance.models import AttendanceSession, SessionStatus
-        from django.db.models import Q
-        
+
         enrollments = student.enrollments.all()
-        course_ids = [e.course_id for e in enrollments]
+        offering_ids = [e.course_offering_id for e in enrollments]
         group_ids = [e.group_id for e in enrollments if e.group_id]
 
-        has_active_session = AttendanceSession.objects.filter(
+        has_active = AttendanceSession.objects.filter(
             organization=student.organization,
             status=SessionStatus.ACTIVE
         ).filter(
-            Q(course_id__in=course_ids, group__isnull=True) |
-            Q(group_id__in=group_ids)
+            Q(occurrence__course_offering_id__in=offering_ids, occurrence__group__isnull=True) |
+            Q(occurrence__group_id__in=group_ids)
         ).exists()
 
-        if has_active_session:
+        if has_active:
             return Response(
-                {'detail': 'Cannot register a new device while a live session is active for your group.'},
+                {
+                    'detail': 'Device registration is locked while an active attendance session is in progress for your enrolled course/group.',
+                    'code': 'DEVICE_REGISTRATION_LOCKED_ACTIVE_SESSION',
+                },
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -72,35 +75,6 @@ class DeviceListView(generics.ListAPIView):
         ).order_by('-registered_at')
 
 
-class DeviceRevokeView(APIView):
-    """Student or admin can revoke a device."""
-    permission_classes = [IsStudent]
-
-    def post(self, request, pk):
-        try:
-            device = Device.objects.get(
-                pk=pk,
-                student=request.user.student_profile,
-                status='ACTIVE',
-            )
-        except Device.DoesNotExist:
-            return Response({'detail': 'Device not found'}, status=status.HTTP_404_NOT_FOUND)
-
-        device.status = 'REVOKED'
-        device.revoked_at = timezone.now()
-        device.save()
-
-        audit(
-            action=AuditAction.DEVICE_REVOKED,
-            actor=request.user,
-            organization=request.user.organization,
-            target_type='Device',
-            target_id=device.id,
-        )
-
-        return Response({'detail': 'Device revoked'})
-
-
 class AdminDeviceListView(generics.ListAPIView):
     """Admin views all devices for their organization."""
     permission_classes = [IsOrganizationAdmin]
@@ -119,8 +93,8 @@ class AdminDeviceListView(generics.ListAPIView):
 
 
 class AdminDeviceRevokeView(APIView):
-    """Admin revokes any device in their organization."""
-    permission_classes = [IsOrganizationAdmin]
+    """Organization Admin or Superadmin revokes a device. Students CANNOT self-revoke."""
+    permission_classes = [IsAdmin]
 
     def post(self, request, pk):
         try:
@@ -144,4 +118,4 @@ class AdminDeviceRevokeView(APIView):
             target_id=device.id,
         )
 
-        return Response({'detail': 'Device revoked'})
+        return Response({'detail': 'Device revoked successfully'})

@@ -1,22 +1,34 @@
-"""Attendance views."""
+"""
+Attendance views.
+"""
 
 import logging
+import csv
 from django.utils import timezone
-from datetime import timedelta
+from django.http import HttpResponse
 from rest_framework import generics, status, filters
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.permissions import IsTeacher, IsStudent, IsOrganizationAdmin, IsAdminOrTeacher
+from apps.accounts.models import Role
+from apps.accounts.permissions import (
+    IsStudent, IsOrganizationAdmin, IsDoctor, IsTeachingAssistant,
+    IsDoctorOrAssistant, IsTeacherOrAdmin,
+)
 from apps.audit.service import audit
 from apps.audit.models import AuditAction
 
-from .models import AttendanceSession, AttendanceRecord, DeviceChallenge, SessionStatus
+from .models import AttendanceSession, AttendanceRecord, SessionStatus
 from .serializers import (
-    AttendanceSessionSerializer, SessionCreateSerializer,
-    CheckInRequestSerializer, AttendanceRecordSerializer,
+    AttendanceSessionSerializer, CheckInRequestSerializer, AttendanceRecordSerializer,
+    AdHocSessionStartSerializer,
 )
 from .verification import AttendanceVerificationService, VerificationError
+from .services import (
+    get_doctor_today_work, get_ta_today_work, get_student_today_work,
+    get_org_now_and_today, open_occurrence_session, close_attendance_session,
+    create_and_open_adhoc_session,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,73 +40,112 @@ def get_client_ip(request):
     return request.META.get('REMOTE_ADDR')
 
 
-class SessionListCreateView(generics.ListCreateAPIView):
-    """Teacher creates sessions; admin and teacher can list."""
-    filter_backends = [filters.SearchFilter]
-    search_fields = ['course__name', 'group__name']
+class TodayWorkView(APIView):
+    """
+    Role-specific daily workflow API (`GET /attendance/today/`).
+    Calculates today's occurrences/sessions using the organization's timezone.
+    """
 
-    def get_permissions(self):
-        if self.request.method == 'GET':
-            return [IsAdminOrTeacher()]
-        return [IsTeacher()]
+    def get(self, request):
+        user = request.user
+        if user.role == Role.DOCTOR:
+            data = get_doctor_today_work(user)
+        elif user.role == Role.TEACHING_ASSISTANT:
+            data = get_ta_today_work(user)
+        elif user.role == Role.STUDENT:
+            data = get_student_today_work(user)
+        elif user.role in [Role.ADMIN, Role.SUPERADMIN]:
+            # For admin, return combined work
+            data = {
+                'doctor_work': get_doctor_today_work(user),
+                'ta_work': get_ta_today_work(user),
+            }
+        else:
+            data = []
 
-    def get_serializer_class(self):
-        if self.request.method == 'POST':
-            return SessionCreateSerializer
-        return AttendanceSessionSerializer
+        return Response(data, status=status.HTTP_200_OK)
 
-    def get_queryset(self):
-        qs = AttendanceSession.objects.filter(
-            organization=self.request.user.organization
-        ).select_related('course', 'group', 'teacher__user').order_by('-created_at')
 
-        if self.request.user.is_teacher:
-            qs = qs.filter(teacher__user=self.request.user)
+class OpenOccurrenceSessionView(APIView):
+    """
+    Opens an attendance session for a scheduled SessionOccurrence.
+    Enforces role authorization (Doctor / TA only) & automatic location capture payload.
+    """
+    permission_classes = [IsDoctorOrAssistant]
 
-        status_filter = self.request.query_params.get('status')
-        if status_filter:
-            qs = qs.filter(status=status_filter)
+    def post(self, request, occurrence_id):
+        lat = request.data.get('latitude')
+        lng = request.data.get('longitude')
+        accuracy = request.data.get('location_accuracy_meters') or request.data.get('accuracy_m')
+        captured_at = request.data.get('location_captured_at') or request.data.get('captured_at')
+        duration = int(request.data.get('duration_minutes', 60))
+        late_after = int(request.data.get('late_after_minutes', 15))
+        radius = request.data.get('radius_meters')
 
-        return qs
+        try:
+            session = open_occurrence_session(
+                user=request.user,
+                occurrence_id=occurrence_id,
+                latitude=lat,
+                longitude=lng,
+                location_accuracy_meters=accuracy,
+                location_captured_at=captured_at,
+                duration_minutes=duration,
+                late_after_minutes=late_after,
+                radius_meters=radius,
+            )
+        except ValueError as exc:
+            code = exc.args[1] if len(exc.args) > 1 else 'BAD_REQUEST'
+            return Response({'detail': exc.args[0], 'code': code}, status=status.HTTP_400_BAD_REQUEST)
 
-    def perform_create(self, serializer):
-        session = serializer.save()
-        audit(
-            action=AuditAction.SESSION_CREATED,
-            actor=self.request.user,
-            organization=self.request.user.organization,
-            target_type='AttendanceSession',
-            target_id=session.id,
-            metadata={
-                'course': session.course.name if session.course else None,
-                'group': session.group.name if session.group else None,
-            },
-        )
+        return Response(AttendanceSessionSerializer(session).data, status=status.HTTP_201_CREATED)
+
+
+class AdHocSessionStartView(APIView):
+    """
+    Creates an ad-hoc SessionOccurrence and opens its AttendanceSession atomically.
+    `POST /attendance/occurrences/ad-hoc/start/`
+    """
+    permission_classes = [IsDoctorOrAssistant]
+
+    def post(self, request):
+        serializer = AdHocSessionStartSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        data = serializer.validated_data
+        try:
+            session = create_and_open_adhoc_session(
+                user=request.user,
+                course_offering_id=data['course_offering_id'],
+                group_id=data.get('group_id'),
+                session_type=data.get('session_type', 'LECTURE'),
+                latitude=data.get('latitude'),
+                longitude=data.get('longitude'),
+                location_accuracy_meters=data.get('location_accuracy_meters'),
+                location_captured_at=data.get('location_captured_at'),
+                duration_minutes=int(request.data.get('duration_minutes', 60)),
+                late_after_minutes=int(request.data.get('late_after_minutes', 15)),
+                radius_meters=data.get('radius_meters', 50.0),
+            )
+        except ValueError as exc:
+            code = exc.args[1] if len(exc.args) > 1 else 'BAD_REQUEST'
+            return Response({'detail': exc.args[0], 'code': code}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(AttendanceSessionSerializer(session).data, status=status.HTTP_201_CREATED)
+
 
 
 class SessionCloseView(APIView):
-    """Teacher closes their own session."""
-    permission_classes = [IsTeacher]
+    """Closes an active attendance session permanently. NO REOPEN."""
+    permission_classes = [IsDoctorOrAssistant]
 
     def post(self, request, pk):
         try:
-            session = AttendanceSession.objects.get(
-                pk=pk,
-                teacher__user=request.user,
-                organization=request.user.organization,
-            )
-        except AttendanceSession.DoesNotExist:
-            return Response({'detail': 'Session not found'}, status=status.HTTP_404_NOT_FOUND)
-
-        if session.status != SessionStatus.ACTIVE:
-            return Response(
-                {'detail': f'Session is already {session.status.lower()}'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        session.status = SessionStatus.CLOSED
-        session.closed_at = timezone.now()
-        session.save(update_fields=['status', 'closed_at'])
+            session = close_attendance_session(user=request.user, session_id=pk)
+        except ValueError as exc:
+            code = exc.args[1] if len(exc.args) > 1 else 'BAD_REQUEST'
+            return Response({'detail': exc.args[0], 'code': code}, status=status.HTTP_400_BAD_REQUEST)
 
         audit(
             action=AuditAction.SESSION_CLOSED,
@@ -106,46 +157,9 @@ class SessionCloseView(APIView):
         return Response({'detail': 'Session closed successfully'})
 
 
-class SessionReopenView(APIView):
-    """Teacher reopens their own closed session."""
-    permission_classes = [IsTeacher]
-
-    def post(self, request, pk):
-        try:
-            session = AttendanceSession.objects.get(
-                pk=pk,
-                teacher__user=request.user,
-                organization=request.user.organization,
-            )
-        except AttendanceSession.DoesNotExist:
-            return Response({'detail': 'Session not found'}, status=status.HTTP_404_NOT_FOUND)
-
-        if session.status != SessionStatus.CLOSED:
-            return Response(
-                {'detail': f'Session cannot be reopened because it is {session.status.lower()}'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        session.status = SessionStatus.ACTIVE
-        session.closed_at = None
-        if timezone.now() > session.expires_at:
-            session.expires_at = timezone.now() + timedelta(minutes=session.duration_minutes)
-        
-        session.save(update_fields=['status', 'closed_at', 'expires_at'])
-
-        audit(
-            action=AuditAction.SESSION_REOPENED,
-            actor=request.user,
-            organization=request.user.organization,
-            target_type='AttendanceSession',
-            target_id=session.id,
-        )
-        return Response({'detail': 'Session reopened successfully'})
-
-
 class SessionDeleteView(APIView):
-    """Teacher or Admin deletes a session completely."""
-    permission_classes = [IsAdminOrTeacher]
+    """Admin or owner deletes a session completely."""
+    permission_classes = [IsTeacherOrAdmin]
 
     def delete(self, request, pk):
         try:
@@ -156,10 +170,6 @@ class SessionDeleteView(APIView):
         except AttendanceSession.DoesNotExist:
             return Response({'detail': 'Session not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        if request.user.role in ['DOCTOR', 'TEACHING_ASSISTANT'] and session.teacher.user != request.user:
-            return Response({'detail': 'You can only delete your own sessions'}, status=status.HTTP_403_FORBIDDEN)
-
-        # Delete all records first due to PROTECT constraint
         AttendanceRecord.objects.filter(session=session).delete()
         session_id = session.id
         session.delete()
@@ -173,11 +183,9 @@ class SessionDeleteView(APIView):
         )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+
 class ChallengeRequestView(APIView):
-    """
-    Student requests a challenge token.
-    The mobile signs it with the device private key after biometric auth.
-    """
+    """Student requests challenge token."""
     permission_classes = [IsStudent]
 
     def post(self, request, session_id):
@@ -203,10 +211,7 @@ class ChallengeRequestView(APIView):
 
 
 class CheckInView(APIView):
-    """
-    Student submits attendance.
-    The server runs the full verification pipeline and makes the final decision.
-    """
+    """Student submits attendance."""
     permission_classes = [IsStudent]
 
     def post(self, request, session_id):
@@ -243,7 +248,6 @@ class CheckInView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Broadcast live update to teacher WebSocket (non-blocking)
         from .signals import broadcast_attendance_record
         broadcast_attendance_record(record)
 
@@ -254,50 +258,89 @@ class CheckInView(APIView):
 
 
 class SessionRecordsView(generics.ListAPIView):
-    """Teacher/admin views records for a session."""
-    permission_classes = [IsAdminOrTeacher]
+    """Scoped access to session attendance records."""
+    permission_classes = [IsTeacherOrAdmin]
     serializer_class = AttendanceRecordSerializer
 
     def get_queryset(self):
         session_id = self.kwargs['pk']
-        return AttendanceRecord.objects.filter(
+        user = self.request.user
+
+        qs = AttendanceRecord.objects.filter(
             session__id=session_id,
-            session__organization=self.request.user.organization,
-        ).select_related('student__user').order_by('verified_at')
+            session__organization=user.organization,
+        ).select_related('student__user', 'session__occurrence__course_offering__course').order_by('verified_at')
+
+        # Scope enforcement
+        if user.role == Role.DOCTOR:
+            qs = qs.filter(session__occurrence__course_offering__doctor__user=user)
+        elif user.role == Role.TEACHING_ASSISTANT:
+            qs = qs.filter(session__occurrence__group__teaching_assistant__user=user)
+
+        return qs
 
 
 class ManualAttendanceOverrideView(APIView):
     """
-    Teacher/Admin manually marks or overrides attendance for a student in a session.
+    Doctor/TA/Admin manually marks PRESENT, LATE, EXCUSED, or CHEATING for a student.
+    Fully audited with reason.
     """
-    permission_classes = [IsAdminOrTeacher]
+    permission_classes = [IsDoctorOrAssistant]
 
     def post(self, request, pk):
         student_id = request.data.get('student_id')
-        status_val = request.data.get('status', 'PRESENT')
+        status_val = request.data.get('status', 'LATE')
+        reason = request.data.get('reason', '')
 
         if not student_id:
             return Response({'detail': 'student_id is required'}, status=status.HTTP_400_BAD_REQUEST)
 
         if status_val not in ['PRESENT', 'LATE', 'EXCUSED', 'CHEATING']:
-            return Response({'detail': 'Invalid status. Must be PRESENT, LATE, EXCUSED, or CHEATING'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {'detail': 'Invalid status for manual correction. Must be PRESENT, LATE, EXCUSED, or CHEATING'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
-            session = AttendanceSession.objects.get(
-                pk=pk,
-                organization=request.user.organization,
-            )
+            session = AttendanceSession.objects.select_related(
+                'occurrence__course_offering__doctor__user',
+                'occurrence__group__teaching_assistant__user'
+            ).get(pk=pk, organization=request.user.organization)
         except AttendanceSession.DoesNotExist:
             return Response({'detail': 'Attendance session not found'}, status=status.HTTP_404_NOT_FOUND)
 
+        # CLOSED/EXPIRED means collection is finished, not that authorized staff
+        # corrections are forbidden. Students may no longer submit attendance,
+        # but staff retain the right to reconcile or correct a record after closure.
+        if session.status not in [SessionStatus.ACTIVE, SessionStatus.CLOSED, SessionStatus.EXPIRED]:
+            return Response(
+                {'detail': 'Manual attendance correction is only allowed for active, closed, or expired sessions'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        _, today_date, _ = get_org_now_and_today(request.user.organization)
+        if session.occurrence.scheduled_date != today_date:
+            return Response(
+                {'detail': 'Attendance corrections are limited to today\'s sessions'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Scoped authorization check
+        if request.user.role == Role.DOCTOR:
+            if not session.occurrence.course_offering.doctor or session.occurrence.course_offering.doctor.user != request.user:
+                return Response({'detail': 'Not authorized for this course offering'}, status=status.HTTP_403_FORBIDDEN)
+        elif request.user.role == Role.TEACHING_ASSISTANT:
+            if not session.occurrence.group or not session.occurrence.group.teaching_assistant or session.occurrence.group.teaching_assistant.user != request.user:
+                return Response({'detail': 'Not authorized for this group'}, status=status.HTTP_403_FORBIDDEN)
+
         from apps.students.models import Student
         try:
-            student = Student.objects.get(
-                pk=student_id,
-                organization=request.user.organization,
-            )
+            student = Student.objects.get(pk=student_id, organization=request.user.organization)
         except Student.DoesNotExist:
             return Response({'detail': 'Student not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        old_record = AttendanceRecord.objects.filter(session=session, student=student).first()
+        old_status = old_record.status if old_record else None
 
         record, created = AttendanceRecord.objects.update_or_create(
             session=session,
@@ -318,7 +361,9 @@ class ManualAttendanceOverrideView(APIView):
                 'manual_override': True,
                 'session_id': session.id,
                 'student_id': student.student_id,
-                'status': status_val,
+                'old_status': old_status,
+                'new_status': status_val,
+                'reason': reason,
             },
         )
 
@@ -342,133 +387,27 @@ class StudentAttendanceHistoryView(generics.ListAPIView):
             return AttendanceRecord.objects.none()
         return AttendanceRecord.objects.filter(
             student=student
-        ).select_related('session__course').order_by('-verified_at')
+        ).select_related('session__occurrence__course_offering__course').order_by('-verified_at')
 
 
-class ActiveSessionsForStudentView(generics.ListAPIView):
-    """Student sees active sessions for their group."""
-    permission_classes = [IsStudent]
+class SessionListCreateView(generics.ListAPIView):
+    """List attendance sessions (Admin/Doctor/TA)."""
+    permission_classes = [IsTeacherOrAdmin]
     serializer_class = AttendanceSessionSerializer
 
     def get_queryset(self):
-        from django.db.models import Q
-        
-        student = getattr(self.request.user, 'student_profile', None)
-        if not student:
-            return AttendanceSession.objects.none()
-            
-        enrollments = student.enrollments.all()
-        course_ids = [e.course_id for e in enrollments]
-        group_ids = [e.group_id for e in enrollments if e.group_id]
-        
-        return AttendanceSession.objects.filter(
-            organization=student.organization,
-            status=SessionStatus.ACTIVE,
-        ).filter(
-            Q(course_id__in=course_ids, group__isnull=True) |
-            Q(group_id__in=group_ids)
-        ).select_related('course', 'group', 'teacher__user').distinct()
+        user = self.request.user
+        qs = AttendanceSession.objects.filter(
+            organization=user.organization
+        ).select_related('occurrence__course_offering__course', 'occurrence__group').order_by('-created_at')
 
+        if user.role == Role.DOCTOR:
+            qs = qs.filter(occurrence__course_offering__doctor__user=user)
+        elif user.role == Role.TEACHING_ASSISTANT:
+            qs = qs.filter(occurrence__group__teaching_assistant__user=user)
 
-class DashboardView(APIView):
-    """Admin dashboard summary."""
-    permission_classes = [IsOrganizationAdmin]
+        status_filter = self.request.query_params.get('status')
+        if status_filter:
+            qs = qs.filter(status=status_filter)
 
-    def get(self, request):
-        from apps.students.models import Student
-        from apps.teachers.models import Teacher
-        from apps.groups.models import Group
-
-        org = request.user.organization
-        today = timezone.now().date()
-
-        return Response({
-            'total_students': Student.objects.filter(organization=org, status='ACTIVE').count(),
-            'total_teachers': Teacher.objects.filter(organization=org).count(),
-            'total_groups': Group.objects.filter(organization=org, status='ACTIVE').count(),
-            'active_sessions': AttendanceSession.objects.filter(
-                organization=org, status=SessionStatus.ACTIVE
-            ).count(),
-            'today_attendance': AttendanceRecord.objects.filter(
-                session__organization=org,
-                verified_at__date=today,
-            ).count(),
-        })
-
-
-class AttendanceExportView(APIView):
-    """Export attendance records to CSV for a course (or specific group)."""
-    permission_classes = [IsAdminOrTeacher]
-
-    def get(self, request):
-        import csv
-        from django.http import HttpResponse
-        from apps.students.models import Student
-
-        course_id = request.query_params.get('course_id')
-        group_id = request.query_params.get('group_id')
-        
-        if not course_id:
-            return Response({'detail': 'course_id is required'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        sessions = AttendanceSession.objects.filter(
-            course_id=course_id,
-            organization=request.user.organization,
-            status=SessionStatus.CLOSED
-        ).order_by('starts_at')
-        
-        if group_id:
-            sessions = sessions.filter(group_id=group_id)
-
-        # Get all students for this course/group
-        if group_id:
-            students = Student.objects.filter(
-                enrollments__group_id=group_id,
-                enrollments__course_id=course_id,
-                organization=request.user.organization,
-                status='ACTIVE'
-            ).distinct()
-        else:
-            students = Student.objects.filter(
-                enrollments__course_id=course_id,
-                organization=request.user.organization,
-                status='ACTIVE'
-            ).distinct()
-
-        # Build records map: {student_id: {session_id: status}}
-        records = AttendanceRecord.objects.filter(
-            session__in=sessions,
-            student__in=students
-        )
-        
-        attendance_map = {}
-        for r in records:
-            if r.student_id not in attendance_map:
-                attendance_map[r.student_id] = {}
-            attendance_map[r.student_id][r.session_id] = r.status
-
-        response = HttpResponse(content_type='text/csv')
-        response['Content-Disposition'] = f'attachment; filename="attendance_export_course_{course_id}.csv"'
-        
-        writer = csv.writer(response)
-        
-        # Header row
-        header = ['Student ID', 'Name', 'Department', 'Level']
-        for s in sessions:
-            header.append(s.starts_at.strftime('%Y-%m-%d %H:%M'))
-        writer.writerow(header)
-        
-        for student in students:
-            row = [
-                student.student_id,
-                student.user.get_full_name(),
-                student.department,
-                student.academic_level,
-            ]
-            for s in sessions:
-                # If they have a record, use it, else 'ABSENT'
-                status_val = attendance_map.get(student.id, {}).get(s.id, 'ABSENT')
-                row.append(status_val)
-            writer.writerow(row)
-
-        return response
+        return qs

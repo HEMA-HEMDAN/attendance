@@ -32,7 +32,7 @@ class Student(models.Model):
     )
 
     phone = models.CharField(max_length=30, blank=True)
-    personal_email = models.EmailField(blank=True, null=True, help_text='Fallback Gmail for OTPs')
+    personal_email = models.EmailField(blank=True, null=True, help_text='Fallback email')
     department = models.CharField(max_length=100, blank=True)
     academic_level = models.CharField(max_length=50, blank=True, help_text='e.g. 1st Year')
     status = models.CharField(
@@ -58,12 +58,12 @@ class StudentEnrollment(models.Model):
     student = models.ForeignKey(
         Student,
         on_delete=models.CASCADE,
-        related_name='enrollments'
+        related_name='enrollments',
     )
-    course = models.ForeignKey(
-        'courses.Course',
+    course_offering = models.ForeignKey(
+        'courses.CourseOffering',
         on_delete=models.CASCADE,
-        related_name='enrollments'
+        related_name='enrollments',
     )
     group = models.ForeignKey(
         'groups.Group',
@@ -71,17 +71,18 @@ class StudentEnrollment(models.Model):
         null=True,
         blank=True,
         related_name='enrollments',
-        help_text='The lab/group for this course'
+        help_text='The lab/group section for this course offering',
     )
     
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = 'student_enrollments'
-        unique_together = [('student', 'course')]
+        unique_together = [('student', 'course_offering')]
         indexes = [
-            models.Index(fields=['student', 'course']),
+            models.Index(fields=['student', 'course_offering']),
+            models.Index(fields=['group']),
         ]
 
     def __str__(self):
-        return f'{self.student.student_id} enrolled in {self.course.code}'
+        return f'{self.student.student_id} enrolled in {self.course_offering.course.code}'

@@ -42,12 +42,13 @@ INSTALLED_APPS = [
     'apps.accounts',
     'apps.organizations',
     'apps.students',
-    'apps.teachers',
+    'apps.staff',
     'apps.groups',
     'apps.courses',
     'apps.devices',
     'apps.locations',
     'apps.attendance',
+    'apps.analytics',
     'apps.audit',
 ]
 
@@ -106,6 +107,9 @@ DATABASES = {
 
 # Auth
 AUTH_USER_MODEL = 'accounts.User'
+LOGIN_URL = '/login/'
+LOGIN_REDIRECT_URL = '/analytics/dashboard/'
+LOGOUT_REDIRECT_URL = '/login/'
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},

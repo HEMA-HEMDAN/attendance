@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Session Attendance</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 32px;
+        background: #0b1c30;
+        color: #f8f9ff;
+        font-family: Inter, system-ui, sans-serif;
+      }
+      main {
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+      a {
+        color: #8eb3ff;
+      }
+      .top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 24px;
+      }
+      .panel {
+        background: #132238;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        padding: 20px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th,
+      td {
+        padding: 12px 10px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        text-align: left;
+      }
+      th {
+        color: #8e9bb0;
+        font-size: 12px;
+        text-transform: uppercase;
+      }
+      .button {
+        color: white;
+        background: #0051d5;
+        padding: 10px 14px;
+        border-radius: 6px;
+        text-decoration: none;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="top">
+        <div>
+          <a href="{% url 'analytics-dashboard-web' %}">Analytics</a>
+          <h1>
+            {{ session.occurrence.course_offering.course.code }} Attendance
+          </h1>
+          <p>
+            {{ session.occurrence.scheduled_date }} · {{
+            session.occurrence.session_type }} · {{
+            session.occurrence.group.name|default:'All Groups' }}
+          </p>
+        </div>
+        <a class="button" href="{{ export_url }}">Export Excel</a>
+      </div>
+      <div class="panel">
+        <table>
+          <thead>
+            <tr>
+              <th>Student ID</th>
+              <th>Student</th>
+              <th>Group</th>
+              <th>Status</th>
+              <th>Attendance Time</th>
+              <th>Distance From Session Location</th>
+              <th>Location Accuracy</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+            <tr>
+              <td>{{ row.student_id }}</td>
+              <td>{{ row.student_name }}</td>
+              <td>{{ row.group }}</td>
+              <td>{{ row.status }}</td>
+              <td>{{ row.attendance_time|default:'-' }}</td>
+              <td>{{ row.distance_from_session_location|default:'-' }}</td>
+              <td>{{ row.location_accuracy|default:'-' }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="7">No eligible students found.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </main>
+  </body>
+</html>

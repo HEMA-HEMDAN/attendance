@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign in — UniAttend Analytics</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0b1c30;
+            --bg-card: #132238;
+            --bg-input: #1a2d47;
+            --primary-accent: #0051d5;
+            --primary-light: #316bf3;
+            --text-main: #f8f9ff;
+            --text-muted: #8e9bb0;
+            --border-color: rgba(255, 255, 255, 0.08);
+            --danger: #ff4d4f;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', system-ui, sans-serif; }
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+        .card {
+            width: 100%;
+            max-width: 420px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 32px;
+        }
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        .brand-logo {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--primary-accent), var(--primary-light));
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+        }
+        h1 { font-size: 22px; margin-bottom: 6px; }
+        p.sub { color: var(--text-muted); font-size: 14px; margin-bottom: 24px; }
+        label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+        input {
+            width: 100%;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            border-radius: 10px;
+            padding: 12px 14px;
+            margin-bottom: 16px;
+            font-size: 15px;
+        }
+        button {
+            width: 100%;
+            background: var(--primary-accent);
+            color: #fff;
+            border: 0;
+            border-radius: 10px;
+            padding: 14px;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        button:hover { background: var(--primary-light); }
+        .error {
+            background: rgba(255, 77, 79, 0.12);
+            border: 1px solid rgba(255, 77, 79, 0.35);
+            color: #ffb3b4;
+            padding: 10px 12px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="brand">
+            <div class="brand-logo">U</div>
+            <div>UniAttend Analytics</div>
+        </div>
+        <h1>Sign in</h1>
+        <p class="sub">Use your organization account to open the analytics dashboard.</p>
+        {% if error %}
+        <div class="error">{{ error }}</div>
+        {% endif %}
+        <form method="post" action="{% url 'web-login' %}">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ next }}">
+            <label for="email">Email</label>
+            <input id="email" name="email" type="email" value="{{ email|default:'' }}" required autocomplete="username">
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" required autocomplete="current-password">
+            <button type="submit">Sign in</button>
+        </form>
+    </div>
+</body>
+</html>

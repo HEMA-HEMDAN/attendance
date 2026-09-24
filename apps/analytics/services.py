@@ -84,8 +84,13 @@ class AnalyticsService:
 
         session_ids = list(sessions.values_list('id', flat=True))
         records = AttendanceRecord.objects.filter(session_id__in=session_ids)
+        completed_sessions = list(
+            sessions.filter(status__in=['CLOSED', 'EXPIRED']).select_related('occurrence')
+        )
+        completed_session_ids = [session.id for session in completed_sessions]
+        completed_records = records.filter(session_id__in=completed_session_ids)
 
-        counts = records.aggregate(
+        counts = completed_records.aggregate(
             present=Count('id', filter=Q(status='PRESENT')),
             late=Count('id', filter=Q(status='LATE')),
             excused=Count('id', filter=Q(status='EXCUSED')),
@@ -100,28 +105,28 @@ class AnalyticsService:
         total_records = counts['total_records'] or 0
 
         # Derived absence calculation:
-        # For all completed/closed/expired sessions in scope, calculate expected enrolled students minus actual records
+        # For all completed/closed/expired sessions in scope, calculate expected enrolled students minus actual records.
         derived_absent_cnt = 0
-        completed_sessions = sessions.filter(status__in=['CLOSED', 'EXPIRED']).select_related('occurrence')
         for s in completed_sessions:
             occ = s.occurrence
             enrollment_qs = StudentEnrollment.objects.filter(course_offering_id=occ.course_offering_id)
             if occ.group_id:
                 enrollment_qs = enrollment_qs.filter(group_id=occ.group_id)
             expected_students = enrollment_qs.count()
-            actual_records = AttendanceRecord.objects.filter(session=s).count()
+            actual_records = completed_records.filter(session_id=s.id).count()
             derived_absent_cnt += max(0, expected_students - actual_records)
 
-        grand_total = total_records + derived_absent_cnt
-        att_pct = round((present_cnt + late_cnt) / grand_total * 100.0, 1) if grand_total > 0 else 0.0
-        late_pct = round(late_cnt / grand_total * 100.0, 1) if grand_total > 0 else 0.0
+        eligible_total = derived_absent_cnt + total_records
+        denominator = eligible_total - excused_cnt
+        att_pct = round((present_cnt + late_cnt) / denominator * 100.0, 1) if denominator > 0 else 0.0
+        late_pct = round(late_cnt / denominator * 100.0, 1) if denominator > 0 else 0.0
 
         # Session type breakdown
         session_type_breakdown = {}
         for stype in ['LECTURE', 'LAB', 'TUTORIAL']:
             stype_sessions = [s for s in completed_sessions if s.occurrence.session_type == stype]
             stype_session_ids = [s.id for s in stype_sessions]
-            stype_records = records.filter(session_id__in=stype_session_ids)
+            stype_records = completed_records.filter(session_id__in=stype_session_ids)
             stype_counts = stype_records.aggregate(
                 p=Count('id', filter=Q(status='PRESENT')),
                 l=Count('id', filter=Q(status='LATE')),

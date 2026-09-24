@@ -158,3 +158,19 @@ class TestOperationalAnalytics:
         workbook = load_workbook(BytesIO(response.content))
         assert workbook.sheetnames == ['Attendance Details']
         assert workbook.active.max_row == 2
+
+    def test_browser_session_can_download_course_export(self, client):
+        org, doctor_user, doctor, ta_user, ta, offering, group, students = make_scope()
+        session = make_closed_session(offering, group, doctor_user)
+        AttendanceRecord.objects.create(session=session, student=students[0], status='PRESENT')
+
+        client.force_login(doctor_user)
+        response = client.get('/api/v1/analytics/export/course/', {'group_id': group.id})
+
+        assert response.status_code == 200
+        assert response['Content-Type'].startswith(
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        assert response['Content-Disposition'].endswith('attendance-summary.xlsx"')
+        workbook = load_workbook(BytesIO(response.content))
+        assert workbook.sheetnames == ['Attendance Summary']

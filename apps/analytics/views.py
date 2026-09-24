@@ -7,6 +7,8 @@ from django.utils.dateparse import parse_date
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.authentication import SessionAuthentication
+from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from apps.accounts.models import Role
 from apps.accounts.permissions import IsDoctor, IsTeachingAssistant, IsOrganizationAdmin, IsSuperadmin, IsStaffOrAdmin
@@ -108,6 +110,7 @@ class AnalyticsSessionAttendanceView(APIView):
 
 class AnalyticsExportView(APIView):
     permission_classes = [IsStaffOrAdmin]
+    authentication_classes = [SessionAuthentication, JWTAuthentication]
 
     def get(self, request, export_type):
         service = AnalyticsService()

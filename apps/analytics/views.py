@@ -2,14 +2,147 @@
 Analytics views — role-scoped analytics APIs.
 """
 
+from django.http import HttpResponse
+from django.utils.dateparse import parse_date
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 
 from apps.accounts.models import Role
-from apps.accounts.permissions import IsDoctor, IsTeachingAssistant, IsOrganizationAdmin, IsSuperadmin
+from apps.accounts.permissions import IsDoctor, IsTeachingAssistant, IsOrganizationAdmin, IsSuperadmin, IsStaffOrAdmin
 from apps.staff.models import Doctor, TeachingAssistant
+from .export_service import AnalyticsExportService
 from .services import AnalyticsService
+
+
+def _analytics_filters(request):
+    filters = {
+        key: request.query_params.get(key) or None
+        for key in (
+            'academic_year_id', 'semester_id', 'course_offering_id', 'group_id',
+            'session_type', 'search', 'attendance_status', 'sort', 'ordering',
+        )
+    }
+    filters['start_date'] = parse_date(request.query_params.get('date_from', '')) if request.query_params.get('date_from') else None
+    filters['end_date'] = parse_date(request.query_params.get('date_to', '')) if request.query_params.get('date_to') else None
+    return {key: value for key, value in filters.items() if value not in (None, '')}
+
+
+def _paginate(rows, request):
+    try:
+        page = max(int(request.query_params.get('page', 1)), 1)
+        page_size = min(max(int(request.query_params.get('page_size', 25)), 1), 100)
+    except (TypeError, ValueError):
+        page, page_size = 1, 25
+    start = (page - 1) * page_size
+    return {
+        'count': len(rows),
+        'page': page,
+        'page_size': page_size,
+        'results': rows[start:start + page_size],
+    }
+
+
+def _sort_rows(rows, request, allowed):
+    sort = request.query_params.get('sort', 'student_name')
+    if sort not in allowed:
+        sort = 'student_name'
+    reverse = request.query_params.get('ordering', 'asc').lower() == 'desc'
+    return sorted(rows, key=lambda row: (row.get(sort) is None, row.get(sort)), reverse=reverse)
+
+
+class AnalyticsStudentListView(APIView):
+    permission_classes = [IsStaffOrAdmin]
+
+    def get(self, request):
+        filters = _analytics_filters(request)
+        rows = AnalyticsService().student_summary_rows(request.user, filters)
+        rows = _sort_rows(rows, request, {
+            'student_name', 'student_id', 'attendance_rate', 'absent', 'late',
+        })
+        return Response({
+            **_paginate(rows, request),
+            'filters': filters,
+            'filter_options': AnalyticsService(
+                organization=request.user.organization if request.user.role != Role.SUPERADMIN else None
+            ).get_filter_options(user=request.user),
+        })
+
+
+class AnalyticsStudentDetailView(APIView):
+    permission_classes = [IsStaffOrAdmin]
+
+    def get(self, request, student_id):
+        service = AnalyticsService()
+        filters = _analytics_filters(request)
+        rows = service.student_history_rows(request.user, student_id, filters)
+        if not service._eligible_enrollments(request.user, filters, student_id=student_id).exists():
+            return Response({'detail': 'Student not found or outside your analytics scope'}, status=status.HTTP_404_NOT_FOUND)
+        return Response({'student_id': student_id, **_paginate(rows, request)})
+
+
+class AnalyticsSessionAttendanceView(APIView):
+    permission_classes = [IsStaffOrAdmin]
+
+    def get(self, request, session_id):
+        session, rows = AnalyticsService().session_attendance_rows(
+            request.user, session_id, _analytics_filters(request)
+        )
+        if not session:
+            return Response({'detail': 'Session not found or outside your analytics scope'}, status=status.HTTP_404_NOT_FOUND)
+        return Response({
+            'session': {
+                'id': session.id,
+                'date': session.occurrence.scheduled_date,
+                'course': session.occurrence.course_offering.course.code,
+                'course_name': session.occurrence.course_offering.course.name,
+                'group': session.occurrence.group.name if session.occurrence.group else 'All Groups',
+                'session_type': session.occurrence.session_type,
+                'starts_at': session.starts_at,
+                'expires_at': session.expires_at,
+                'status': session.status,
+            },
+            **_paginate(rows, request),
+        })
+
+
+class AnalyticsExportView(APIView):
+    permission_classes = [IsStaffOrAdmin]
+
+    def get(self, request, export_type):
+        service = AnalyticsService()
+        filters = _analytics_filters(request)
+        if export_type == 'course':
+            content = AnalyticsExportService.course_summary(
+                service.student_summary_rows(request.user, filters)
+            )
+            filename = 'attendance-summary.xlsx'
+        elif export_type == 'session':
+            session_id = request.query_params.get('session_id')
+            if not session_id:
+                return Response({'detail': 'session_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+            session, rows = service.session_attendance_rows(request.user, session_id, filters)
+            if not session:
+                return Response({'detail': 'Session not found or outside your analytics scope'}, status=status.HTTP_404_NOT_FOUND)
+            content = AnalyticsExportService.session_details(rows)
+            filename = f'session-{session.id}-attendance.xlsx'
+        elif export_type == 'student':
+            student_id = request.query_params.get('student_id')
+            if not student_id:
+                return Response({'detail': 'student_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+            rows = service.student_history_rows(request.user, student_id, filters)
+            if not service._eligible_enrollments(request.user, filters, student_id=student_id).exists():
+                return Response({'detail': 'Student not found or outside your analytics scope'}, status=status.HTTP_404_NOT_FOUND)
+            content = AnalyticsExportService.student_history(rows)
+            filename = f'student-{student_id}-attendance.xlsx'
+        else:
+            return Response({'detail': 'Unknown export type'}, status=status.HTTP_404_NOT_FOUND)
+        response = HttpResponse(
+            content,
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
 
 
 class DoctorAnalyticsView(APIView):
@@ -228,6 +361,25 @@ def build_analytics_dashboard_context(request):
     )
 
     filter_options = svc.get_filter_options(user=user)
+    student_rows = svc.student_summary_rows(user, {
+        'academic_year_id': year_id,
+        'semester_id': sem_id,
+        'course_offering_id': offering_id,
+        'group_id': group_id,
+        'session_type': sess_type,
+        'start_date': _query_value(request, 'date_from'),
+        'end_date': _query_value(request, 'date_to'),
+        'search': _query_value(request, 'search'),
+    })
+    session_rows = svc.session_list_rows(user, {
+        'academic_year_id': year_id,
+        'semester_id': sem_id,
+        'course_offering_id': offering_id,
+        'group_id': group_id,
+        'session_type': sess_type,
+        'start_date': _query_value(request, 'date_from'),
+        'end_date': _query_value(request, 'date_to'),
+    })
 
     user_dict = {
         'id': user.id,
@@ -242,6 +394,9 @@ def build_analytics_dashboard_context(request):
         'metrics': metrics,
         'role_details': role_details,
         'filter_options': filter_options,
+        'student_rows': student_rows[:100],
+        'session_rows': session_rows[:100],
+        'student_export_query': request.GET.urlencode() if hasattr(request, 'GET') else '',
     }
 
 

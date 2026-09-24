@@ -185,13 +185,21 @@ class AnalyticsService:
     def get_filter_options(self, user=None):
         """Return available dropdown options for filtering analytics."""
         org = self.organization or (user.organization if user else None)
-        years = AcademicYear.objects.filter(organization=org).values('id', 'name') if org else []
-        semesters = Semester.objects.filter(organization=org).values('id', 'name') if org else []
+        years = AcademicYear.objects.filter(organization=org).values('id', 'name') if org else AcademicYear.objects.all().values('id', 'name')
+        semesters = Semester.objects.filter(organization=org).values('id', 'name') if org else Semester.objects.all().values('id', 'name')
 
-        offerings_qs = CourseOffering.objects.filter(course__organization=org, status='ACTIVE').select_related('course') if org else []
+        offerings_qs = CourseOffering.objects.filter(course__organization=org, status='ACTIVE').select_related('course') if org else CourseOffering.objects.all().select_related('course')
+        if user and user.role == 'DOCTOR':
+            offerings_qs = offerings_qs.filter(doctor__user=user)
+        elif user and user.role == 'TEACHING_ASSISTANT':
+            offerings_qs = offerings_qs.filter(groups__teaching_assistant__user=user).distinct()
         offerings = [{'id': o.id, 'name': f"{o.course.code} — {o.course.name}"} for o in offerings_qs]
 
-        groups_qs = Group.objects.filter(course_offering__course__organization=org, status='ACTIVE') if org else []
+        groups_qs = Group.objects.filter(course_offering__course__organization=org, status='ACTIVE') if org else Group.objects.all()
+        if user and user.role == 'DOCTOR':
+            groups_qs = groups_qs.filter(course_offering__doctor__user=user)
+        elif user and user.role == 'TEACHING_ASSISTANT':
+            groups_qs = groups_qs.filter(teaching_assistant__user=user)
         groups = [{'id': g.id, 'name': g.name} for g in groups_qs]
 
         return {
@@ -205,4 +213,208 @@ class AnalyticsService:
                 {'id': 'TUTORIAL', 'name': 'Tutorial'},
             ],
         }
+
+    def _scope_sessions_for_user(self, user, sessions=None):
+        """Apply the authenticated user's analytics scope to a session queryset."""
+        sessions = sessions if sessions is not None else AttendanceSession.objects.all()
+        if user.role == 'SUPERADMIN':
+            return sessions
+        if not user.organization_id:
+            return sessions.none()
+        sessions = sessions.filter(organization_id=user.organization_id)
+        if user.role == 'DOCTOR':
+            return sessions.filter(occurrence__course_offering__doctor__user_id=user.id)
+        if user.role == 'TEACHING_ASSISTANT':
+            return sessions.filter(occurrence__group__teaching_assistant__user_id=user.id)
+        if user.role in ('ADMIN', 'SUPERADMIN'):
+            return sessions
+        return sessions.none()
+
+    def _filtered_sessions_for_user(self, user, filters=None):
+        filters = filters or {}
+        sessions = self._scope_sessions_for_user(user)
+        field_map = {
+            'academic_year_id': 'occurrence__course_offering__academic_year_id',
+            'semester_id': 'occurrence__course_offering__semester_id',
+            'course_offering_id': 'occurrence__course_offering_id',
+            'group_id': 'occurrence__group_id',
+            'session_type': 'occurrence__session_type',
+            'start_date': 'occurrence__scheduled_date__gte',
+            'end_date': 'occurrence__scheduled_date__lte',
+        }
+        for key, field in field_map.items():
+            if filters.get(key):
+                sessions = sessions.filter(**{field: filters[key]})
+        return sessions.select_related(
+            'occurrence__course_offering__course',
+            'occurrence__course_offering__academic_year',
+            'occurrence__course_offering__semester',
+            'occurrence__group',
+        ).order_by('occurrence__scheduled_date', 'starts_at')
+
+    def _eligible_enrollments(self, user, filters=None, student_id=None):
+        filters = filters or {}
+        enrollments = StudentEnrollment.objects.filter(
+            student__status='ACTIVE',
+            course_offering__status='ACTIVE',
+        ).select_related('student__user', 'group', 'course_offering__course')
+        if user.role != 'SUPERADMIN':
+            enrollments = enrollments.filter(student__organization_id=user.organization_id)
+        if user.role == 'DOCTOR':
+            enrollments = enrollments.filter(course_offering__doctor__user_id=user.id)
+        elif user.role == 'TEACHING_ASSISTANT':
+            enrollments = enrollments.filter(group__teaching_assistant__user_id=user.id)
+        elif user.role not in ('ADMIN', 'SUPERADMIN'):
+            return enrollments.none()
+        if filters.get('academic_year_id'):
+            enrollments = enrollments.filter(course_offering__academic_year_id=filters['academic_year_id'])
+        if filters.get('semester_id'):
+            enrollments = enrollments.filter(course_offering__semester_id=filters['semester_id'])
+        if filters.get('course_offering_id'):
+            enrollments = enrollments.filter(course_offering_id=filters['course_offering_id'])
+        if filters.get('group_id'):
+            enrollments = enrollments.filter(group_id=filters['group_id'])
+        if student_id:
+            enrollments = enrollments.filter(student_id=student_id)
+        return enrollments
+
+    @staticmethod
+    def _session_matches_enrollment(session, enrollment):
+        return (
+            session.occurrence.course_offering_id == enrollment.course_offering_id
+            and (session.occurrence.group_id is None or session.occurrence.group_id == enrollment.group_id)
+        )
+
+    @staticmethod
+    def _attendance_rate(present, late, excused, eligible):
+        denominator = eligible - excused
+        return round((present + late) / denominator * 100.0, 1) if denominator > 0 else 0.0
+
+    def student_summary_rows(self, user, filters=None):
+        """Return one derived attendance summary row per visible student."""
+        filters = filters or {}
+        sessions = list(self._filtered_sessions_for_user(user, filters).filter(status__in=['CLOSED', 'EXPIRED']))
+        enrollments = list(self._eligible_enrollments(user, filters))
+        session_ids = [session.id for session in sessions]
+        records = AttendanceRecord.objects.filter(session_id__in=session_ids).values(
+            'session_id', 'student_id', 'status', 'verified_at'
+        )
+        record_map = {(record['session_id'], record['student_id']): record for record in records}
+        by_student = {}
+        for enrollment in enrollments:
+            row = by_student.setdefault(enrollment.student_id, {
+                'student_pk': enrollment.student_id,
+                'student_id': enrollment.student.student_id,
+                'student_name': enrollment.student.user.get_full_name(),
+                'group': set(),
+                'eligible_sessions': 0,
+                'present': 0,
+                'late': 0,
+                'excused': 0,
+                'cheating': 0,
+                'absent': 0,
+            })
+            if enrollment.group:
+                row['group'].add(enrollment.group.name)
+            relevant_sessions = [session for session in sessions if self._session_matches_enrollment(session, enrollment)]
+            for session in relevant_sessions:
+                row['eligible_sessions'] += 1
+                record = record_map.get((session.id, enrollment.student_id))
+                if not record:
+                    row['absent'] += 1
+                else:
+                    row[record['status'].lower()] += 1
+        rows = []
+        for row in by_student.values():
+            row['group'] = ', '.join(sorted(row['group'])) or 'All Groups'
+            row['attendance_rate'] = self._attendance_rate(
+                row['present'], row['late'], row['excused'], row['eligible_sessions']
+            )
+            rows.append(row)
+        search = (filters.get('search') or '').strip().lower()
+        if search:
+            rows = [row for row in rows if search in row['student_id'].lower() or search in row['student_name'].lower()]
+        if filters.get('attendance_status'):
+            status_key = filters['attendance_status'].lower()
+            rows = [row for row in rows if row.get(status_key, 0) > 0]
+        return rows
+
+    def session_attendance_rows(self, user, session_id, filters=None):
+        """Return every eligible student for one authorized session, including ABSENT."""
+        filters = filters or {}
+        sessions = self._scope_sessions_for_user(user).filter(id=session_id).select_related(
+            'occurrence__course_offering__course', 'occurrence__group'
+        )
+        session = sessions.first()
+        if not session:
+            return None, []
+        enrollments = list(self._eligible_enrollments(user, filters).filter(
+            course_offering_id=session.occurrence.course_offering_id
+        ))
+        if session.occurrence.group_id:
+            enrollments = [enrollment for enrollment in enrollments if enrollment.group_id == session.occurrence.group_id]
+        records = {
+            record.student_id: record for record in AttendanceRecord.objects.filter(
+                session=session, student_id__in=[enrollment.student_id for enrollment in enrollments]
+            ).select_related('student__user')
+        }
+        rows = []
+        for enrollment in enrollments:
+            record = records.get(enrollment.student_id)
+            rows.append({
+                'student_id': enrollment.student.student_id,
+                'student_name': enrollment.student.user.get_full_name(),
+                'group': enrollment.group.name if enrollment.group else 'All Groups',
+                'status': record.status if record else 'ABSENT',
+                'attendance_time': record.verified_at.isoformat() if record else None,
+                'distance_from_session_location': record.distance_from_location_meters if record else None,
+                'location_accuracy': record.location_accuracy_meters if record else None,
+            })
+        if filters.get('attendance_status'):
+            rows = [row for row in rows if row['status'] == filters['attendance_status']]
+        return session, rows
+
+    def student_history_rows(self, user, student_id, filters=None):
+        """Return the authorized student's session history with derived absences."""
+        filters = dict(filters or {})
+        enrollments = list(self._eligible_enrollments(user, filters, student_id=student_id))
+        if not enrollments:
+            return []
+        sessions = list(self._filtered_sessions_for_user(user, filters).filter(status__in=['CLOSED', 'EXPIRED']))
+        records = {
+            record.session_id: record for record in AttendanceRecord.objects.filter(
+                session_id__in=[session.id for session in sessions], student_id=student_id
+            )
+        }
+        rows = []
+        for session in sessions:
+            if not any(self._session_matches_enrollment(session, enrollment) for enrollment in enrollments):
+                continue
+            record = records.get(session.id)
+            rows.append({
+                'date': session.occurrence.scheduled_date.isoformat(),
+                'course': session.occurrence.course_offering.course.code,
+                'group': session.occurrence.group.name if session.occurrence.group else 'All Groups',
+                'session_type': session.occurrence.session_type,
+                'session_id': session.id,
+                'status': record.status if record else 'ABSENT',
+                'attendance_time': record.verified_at.isoformat() if record else None,
+                'distance_from_session_location': record.distance_from_location_meters if record else None,
+                'location_accuracy': record.location_accuracy_meters if record else None,
+            })
+        if filters.get('attendance_status'):
+            rows = [row for row in rows if row['status'] == filters['attendance_status']]
+        return rows
+
+    def session_list_rows(self, user, filters=None):
+        """Return visible sessions for browser/API drill-down navigation."""
+        return [{
+            'session_id': session.id,
+            'date': session.occurrence.scheduled_date.isoformat(),
+            'course': session.occurrence.course_offering.course.code,
+            'course_name': session.occurrence.course_offering.course.name,
+            'group': session.occurrence.group.name if session.occurrence.group else 'All Groups',
+            'session_type': session.occurrence.session_type,
+            'status': session.status,
+        } for session in self._filtered_sessions_for_user(user, filters)]
 

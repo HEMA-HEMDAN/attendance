@@ -437,6 +437,21 @@
                 </select>
             </div>
 
+            <div class="filter-group">
+                <label class="filter-label">Student Search</label>
+                <input name="search" class="filter-input" value="{{ request.GET.search|default:'' }}" placeholder="Name or student ID">
+            </div>
+
+            <div class="filter-group">
+                <label class="filter-label">Date From</label>
+                <input type="date" name="date_from" class="filter-input" value="{{ request.GET.date_from|default:'' }}">
+            </div>
+
+            <div class="filter-group">
+                <label class="filter-label">Date To</label>
+                <input type="date" name="date_to" class="filter-input" value="{{ request.GET.date_to|default:'' }}">
+            </div>
+
             <button type="submit" class="btn-apply">Apply Filters</button>
         </form>
 
@@ -581,6 +596,63 @@
                                 <td colspan="8" class="empty-state">No sub-scope records found for the current user authorization.</td>
                             </tr>
                         {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="section-card">
+            <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
+                <span>Students</span>
+                <a class="logout-link" href="/api/v1/analytics/export/course/{% if student_export_query %}?{{ student_export_query }}{% endif %}">Export Excel</a>
+            </div>
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Student</th>
+                            <th>Student ID</th>
+                            <th>Group</th>
+                            <th>Present</th>
+                            <th>Late</th>
+                            <th>Excused</th>
+                            <th>Cheating</th>
+                            <th>Absent</th>
+                            <th>Attendance Rate</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in student_rows %}
+                            <tr>
+                                <td><b><a href="{% url 'analytics-student-detail' row.student_pk %}">{{ row.student_name }}</a></b></td>
+                                <td>{{ row.student_id }}</td>
+                                <td>{{ row.group }}</td>
+                                <td>{{ row.present }}</td>
+                                <td>{{ row.late }}</td>
+                                <td>{{ row.excused }}</td>
+                                <td>{{ row.cheating }}</td>
+                                <td>{{ row.absent }}</td>
+                                <td><b>{{ row.attendance_rate }}%</b></td>
+                            </tr>
+                        {% empty %}
+                            <tr><td colspan="9" class="empty-state">No enrolled students match this authorized filter scope.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="section-card">
+            <div class="section-title"><span>Sessions</span></div>
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead><tr><th>Date</th><th>Course</th><th>Group</th><th>Type</th><th>Status</th><th>Details</th></tr></thead>
+                    <tbody>
+                        {% for row in session_rows %}
+                            <tr><td>{{ row.date }}</td><td>{{ row.course }} — {{ row.course_name }}</td><td>{{ row.group }}</td><td>{{ row.session_type }}</td><td>{{ row.status }}</td><td><a href="{% url 'analytics-session-attendance-web' row.session_id %}">Open attendance</a></td></tr>
+                        {% empty %}
+                            <tr><td colspan="6" class="empty-state">No sessions match this authorized filter scope.</td></tr>
+                        {% endfor %}
                     </tbody>
                 </table>
             </div>

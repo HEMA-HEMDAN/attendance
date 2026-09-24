@@ -423,9 +423,7 @@ def open_occurrence_session(user, occurrence_id, latitude=None, longitude=None, 
     now = timezone.now()
     expires_at = now + timedelta(minutes=duration_minutes)
 
-    radius_val = float(radius_meters) if radius_meters is not None else ATTENDANCE_DEFAULT_RADIUS_METERS
-    if radius_val <= 0:
-        radius_val = ATTENDANCE_DEFAULT_RADIUS_METERS
+    radius_val = ATTENDANCE_DEFAULT_RADIUS_METERS
 
     session = AttendanceSession.objects.create(
         occurrence=occ,

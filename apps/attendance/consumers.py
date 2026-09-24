@@ -64,7 +64,8 @@ class AttendanceSessionConsumer(AsyncWebsocketConsumer):
         """Broadcast attendance record update and location snapshot to connected staff."""
         record = event['record']
         radar_status = 'KNOWN'
-        if record.get('distance_from_location_meters') is not None and record.get('distance_from_location_meters') > 50:
+        radius_meters = record.get('radius_meters', 50)
+        if record.get('distance_from_location_meters') is not None and record.get('distance_from_location_meters') > radius_meters:
             radar_status = 'OUTSIDE'
         elif record.get('submitted_latitude') is None:
             radar_status = 'UNKNOWN'

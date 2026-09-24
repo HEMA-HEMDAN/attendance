@@ -29,6 +29,7 @@ def broadcast_attendance_record(record):
                     'student_name': record.student.user.get_full_name(),
                     'status': record.status,
                     'verified_at': record.verified_at.isoformat(),
+                    'radius_meters': record.session.radius_meters,
                     'distance_from_location_meters': record.distance_from_location_meters,
                     'submitted_latitude': float(record.submitted_latitude) if record.submitted_latitude else None,
                     'submitted_longitude': float(record.submitted_longitude) if record.submitted_longitude else None,

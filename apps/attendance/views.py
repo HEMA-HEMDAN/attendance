@@ -26,7 +26,8 @@ from .serializers import (
 from .verification import AttendanceVerificationService, VerificationError
 from .services import (
     get_doctor_today_work, get_ta_today_work, get_student_today_work,
-    open_occurrence_session, close_attendance_session, create_and_open_adhoc_session,
+    get_org_now_and_today, open_occurrence_session, close_attendance_session,
+    create_and_open_adhoc_session,
 )
 
 logger = logging.getLogger(__name__)
@@ -307,6 +308,22 @@ class ManualAttendanceOverrideView(APIView):
             ).get(pk=pk, organization=request.user.organization)
         except AttendanceSession.DoesNotExist:
             return Response({'detail': 'Attendance session not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        # CLOSED/EXPIRED means collection is finished, not that authorized staff
+        # corrections are forbidden. Students may no longer submit attendance,
+        # but staff retain the right to reconcile or correct a record after closure.
+        if session.status not in [SessionStatus.ACTIVE, SessionStatus.CLOSED, SessionStatus.EXPIRED]:
+            return Response(
+                {'detail': 'Manual attendance correction is only allowed for active, closed, or expired sessions'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        _, today_date, _ = get_org_now_and_today(request.user.organization)
+        if session.occurrence.scheduled_date != today_date:
+            return Response(
+                {'detail': 'Attendance corrections are limited to today\'s sessions'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         # Scoped authorization check
         if request.user.role == Role.DOCTOR:

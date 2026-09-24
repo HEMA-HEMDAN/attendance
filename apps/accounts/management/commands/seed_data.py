@@ -189,7 +189,7 @@ class Command(BaseCommand):
             defaults={
                 'latitude': 30.0444,
                 'longitude': 31.2357,
-                'radius_meters': 150,
+                'radius_meters': 50,
                 'status': LocationStatus.ACTIVE,
             },
         )[0]
@@ -343,25 +343,37 @@ class Command(BaseCommand):
         return {'today_lecture': today_lecture, 'future_lab': lab, 'future_tutorial': tutorial, 'historical': historical}
 
     def _ensure_occurrence(self, schedule, scheduled_date, org_tz, status):
-        starts_at = datetime.combine(scheduled_date, schedule.start_time, tzinfo=org_tz)
-        ends_at = datetime.combine(scheduled_date, schedule.end_time, tzinfo=org_tz)
+        starts_at = datetime.combine(
+            scheduled_date,
+            schedule.start_time,
+            tzinfo=org_tz,
+        )
+        ends_at = datetime.combine(
+            scheduled_date,
+            schedule.end_time,
+            tzinfo=org_tz,
+        )
+
         occurrence, _ = SessionOccurrence.objects.update_or_create(
             schedule=schedule,
             scheduled_date=scheduled_date,
             defaults={
                 'course_offering': schedule.course_offering,
                 'group': schedule.group,
+                'occurrence_type': 'SCHEDULED',
                 'starts_at': starts_at,
                 'ends_at': ends_at,
                 'session_type': schedule.session_type,
                 'status': status,
             },
         )
+
         return occurrence
 
     def _historical_session(self, occurrence, organization, opened_by, org_tz):
         starts_at = occurrence.starts_at
         expires_at = starts_at + timedelta(hours=2)
+
         return AttendanceSession.objects.update_or_create(
             occurrence=occurrence,
             defaults={
@@ -369,7 +381,7 @@ class Command(BaseCommand):
                 'opened_by': opened_by,
                 'latitude': 30.0444,
                 'longitude': 31.2357,
-                'radius_meters': 150,
+                'radius_meters': 50,
                 'late_after_minutes': 15,
                 'status': SessionStatus.CLOSED,
                 'starts_at': starts_at,

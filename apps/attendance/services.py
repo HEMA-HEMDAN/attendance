@@ -367,7 +367,7 @@ def validate_opener_location(latitude, longitude, location_accuracy_meters=None,
 
 
 @transaction.atomic
-def open_occurrence_session(user, occurrence_id, latitude=None, longitude=None, location_accuracy_meters=None, location_captured_at=None, duration_minutes=60, late_after_minutes=15, **kwargs):
+def open_occurrence_session(user, occurrence_id, latitude=None, longitude=None, location_accuracy_meters=None, location_captured_at=None, duration_minutes=60, late_after_minutes=15, radius_meters=ATTENDANCE_DEFAULT_RADIUS_METERS, **kwargs):
     """
     Opens an attendance session for a valid SessionOccurrence.
     Enforces role authorization (DOCTOR or TEACHING_ASSISTANT only) & 1-to-1 occurrence constraint.
@@ -423,6 +423,10 @@ def open_occurrence_session(user, occurrence_id, latitude=None, longitude=None, 
     now = timezone.now()
     expires_at = now + timedelta(minutes=duration_minutes)
 
+    radius_val = float(radius_meters) if radius_meters is not None else ATTENDANCE_DEFAULT_RADIUS_METERS
+    if radius_val <= 0:
+        radius_val = ATTENDANCE_DEFAULT_RADIUS_METERS
+
     session = AttendanceSession.objects.create(
         occurrence=occ,
         organization=org,
@@ -431,7 +435,7 @@ def open_occurrence_session(user, occurrence_id, latitude=None, longitude=None, 
         longitude=lon,
         location_accuracy_meters=accuracy,
         location_captured_at=captured_at,
-        radius_meters=ATTENDANCE_DEFAULT_RADIUS_METERS,
+        radius_meters=radius_val,
         late_after_minutes=late_after_minutes,
         status=SessionStatus.ACTIVE,
         starts_at=now,
@@ -451,6 +455,7 @@ def open_occurrence_session(user, occurrence_id, latitude=None, longitude=None, 
             'occurrence_id': occ.id,
             'session_type': occ.session_type,
             'occurrence_type': occ.occurrence_type,
+            'radius_meters': radius_val,
         },
     )
 
@@ -458,7 +463,7 @@ def open_occurrence_session(user, occurrence_id, latitude=None, longitude=None, 
 
 
 @transaction.atomic
-def create_and_open_adhoc_session(user, course_offering_id, group_id=None, session_type='LECTURE', latitude=None, longitude=None, location_accuracy_meters=None, location_captured_at=None, duration_minutes=60, late_after_minutes=15, **kwargs):
+def create_and_open_adhoc_session(user, course_offering_id, group_id=None, session_type='LECTURE', latitude=None, longitude=None, location_accuracy_meters=None, location_captured_at=None, duration_minutes=60, late_after_minutes=15, radius_meters=ATTENDANCE_DEFAULT_RADIUS_METERS, **kwargs):
     """
     Creates an ad-hoc SessionOccurrence and immediately opens its AttendanceSession in one atomic operation.
     """
@@ -545,6 +550,7 @@ def create_and_open_adhoc_session(user, course_offering_id, group_id=None, sessi
         location_captured_at=location_captured_at,
         duration_minutes=duration_minutes,
         late_after_minutes=late_after_minutes,
+        radius_meters=radius_meters,
     )
 
     return session

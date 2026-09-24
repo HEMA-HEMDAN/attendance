@@ -2,9 +2,11 @@
 Accounts app — custom User model with role-based access.
 
 Roles:
-  ADMIN   — Organization administrator
-  TEACHER — Teacher within an organization
-  STUDENT — Student within an organization
+  SUPERADMIN         — System administrator
+  ADMIN              — Organization administrator
+  DOCTOR             — Doctor (Course Owner)
+  TEACHING_ASSISTANT — Teaching Assistant
+  STUDENT            — Student within an organization
 
 All users belong to exactly one organization.
 """

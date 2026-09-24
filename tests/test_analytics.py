@@ -70,3 +70,43 @@ class TestAnalytics:
         assert res.status_code == 200
         assert 'platform_metrics' in res.data
         assert 'organizations' in res.data
+
+    def test_web_analytics_dashboard_html_and_json(self, client):
+        org = OrganizationFactory()
+        doc_user = DoctorUserFactory(organization=org)
+        doc = DoctorFactory(user=doc_user, organization=org)
+        CourseOfferingFactory(doctor=doc)
+
+        client.force_authenticate(user=doc_user)
+
+        # JSON request
+        res_json = client.get('/api/v1/analytics/dashboard/', HTTP_ACCEPT='application/json')
+        assert res_json.status_code == 200
+        assert 'metrics' in res_json.data
+        assert 'role_details' in res_json.data
+        assert 'filter_options' in res_json.data
+
+        # HTML request
+        res_html = client.get('/api/v1/analytics/dashboard/', HTTP_ACCEPT='text/html')
+        assert res_html.status_code == 200
+        assert b'Attendance &amp; Performance Dashboard' in res_html.content or b'Attendance & Performance Dashboard' in res_html.content
+
+    def test_analytics_scoping_isolation(self, client):
+        org1 = OrganizationFactory()
+        org2 = OrganizationFactory()
+
+        doc_user1 = DoctorUserFactory(organization=org1)
+        doc_user2 = DoctorUserFactory(organization=org2)
+        doc1 = DoctorFactory(user=doc_user1, organization=org1)
+        doc2 = DoctorFactory(user=doc_user2, organization=org2)
+
+        offering1 = CourseOfferingFactory(doctor=doc1)
+        offering2 = CourseOfferingFactory(doctor=doc2)
+
+        client.force_authenticate(user=doc_user1)
+        res = client.get('/api/v1/analytics/doctor/')
+        assert res.status_code == 200
+        offering_ids = [o['course_offering_id'] for o in res.data['course_offerings']]
+        assert offering1.id in offering_ids
+        assert offering2.id not in offering_ids
+

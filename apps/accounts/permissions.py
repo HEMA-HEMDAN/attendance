@@ -64,8 +64,8 @@ class IsStudent(permissions.BasePermission):
         )
 
 
-class IsTeacherOrAdmin(permissions.BasePermission):
-    """Grants access to Admin, Superadmin, Doctor, and Teaching Assistant."""
+class IsStaffOrAdmin(permissions.BasePermission):
+    """Grants access to Doctor, Teaching Assistant, Admin, and Superadmin."""
     def has_permission(self, request, view):
         return bool(
             request.user and request.user.is_authenticated
@@ -73,7 +73,8 @@ class IsTeacherOrAdmin(permissions.BasePermission):
         )
 
 
-IsAdminOrTeacher = IsTeacherOrAdmin
+IsTeacherOrAdmin = IsStaffOrAdmin
+IsAdminOrTeacher = IsStaffOrAdmin
 IsAdmin = IsOrganizationAdmin
 
 

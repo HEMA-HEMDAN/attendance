@@ -79,6 +79,7 @@ class OpenOccurrenceSessionView(APIView):
         captured_at = request.data.get('location_captured_at') or request.data.get('captured_at')
         duration = int(request.data.get('duration_minutes', 60))
         late_after = int(request.data.get('late_after_minutes', 15))
+        radius = request.data.get('radius_meters')
 
         try:
             session = open_occurrence_session(
@@ -90,6 +91,7 @@ class OpenOccurrenceSessionView(APIView):
                 location_captured_at=captured_at,
                 duration_minutes=duration,
                 late_after_minutes=late_after,
+                radius_meters=radius,
             )
         except ValueError as exc:
             code = exc.args[1] if len(exc.args) > 1 else 'BAD_REQUEST'
@@ -123,6 +125,7 @@ class AdHocSessionStartView(APIView):
                 location_captured_at=data.get('location_captured_at'),
                 duration_minutes=int(request.data.get('duration_minutes', 60)),
                 late_after_minutes=int(request.data.get('late_after_minutes', 15)),
+                radius_meters=data.get('radius_meters', 50.0),
             )
         except ValueError as exc:
             code = exc.args[1] if len(exc.args) > 1 else 'BAD_REQUEST'
@@ -278,10 +281,10 @@ class SessionRecordsView(generics.ListAPIView):
 
 class ManualAttendanceOverrideView(APIView):
     """
-    Teacher/Admin manually marks LATE, EXCUSED, or CHEATING for a student.
+    Doctor/TA/Admin manually marks PRESENT, LATE, EXCUSED, or CHEATING for a student.
     Fully audited with reason.
     """
-    permission_classes = [IsTeacherOrAdmin]
+    permission_classes = [IsDoctorOrAssistant]
 
     def post(self, request, pk):
         student_id = request.data.get('student_id')
@@ -291,9 +294,9 @@ class ManualAttendanceOverrideView(APIView):
         if not student_id:
             return Response({'detail': 'student_id is required'}, status=status.HTTP_400_BAD_REQUEST)
 
-        if status_val not in ['LATE', 'EXCUSED', 'CHEATING']:
+        if status_val not in ['PRESENT', 'LATE', 'EXCUSED', 'CHEATING']:
             return Response(
-                {'detail': 'Invalid status for manual correction. Must be LATE, EXCUSED, or CHEATING'},
+                {'detail': 'Invalid status for manual correction. Must be PRESENT, LATE, EXCUSED, or CHEATING'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 

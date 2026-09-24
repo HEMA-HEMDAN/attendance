@@ -2,6 +2,8 @@
 Analytics domain service — multi-dimensional attendance & academic reporting engine over Django + PostgreSQL.
 """
 
+from datetime import timedelta
+
 from django.db.models import Count, Q
 from django.db.models.functions import TruncWeek
 from apps.attendance.models import AttendanceSession, AttendanceRecord, SessionOccurrence
@@ -150,7 +152,8 @@ class AnalyticsService:
             w_start = item['week']
             if not w_start:
                 continue
-            w_sessions = sessions.filter(starts_at__gte=w_start, starts_at__lt=w_start + TruncWeek.kind_to_timedelta('week'))
+            w_end = w_start + timedelta(weeks=1)
+            w_sessions = sessions.filter(starts_at__gte=w_start, starts_at__lt=w_end)
             w_ids = list(w_sessions.values_list('id', flat=True))
             w_recs = records.filter(session_id__in=w_ids)
             w_p = w_recs.filter(status='PRESENT').count()

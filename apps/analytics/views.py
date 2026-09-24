@@ -231,8 +231,15 @@ class AnalyticsDashboardWebView(APIView):
 
         filter_options = svc.get_filter_options(user=user)
 
+        user_dict = {
+            'id': user.id,
+            'email': user.email,
+            'full_name': user.get_full_name(),
+            'role': user.role,
+        }
+
         context = {
-            'user': user,
+            'user': user_dict,
             'metrics': metrics,
             'role_details': role_details,
             'filter_options': filter_options,

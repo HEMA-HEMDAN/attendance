@@ -52,13 +52,16 @@ class AdHocSessionStartSerializer(serializers.Serializer):
     location_accuracy_meters = serializers.FloatField(required=False, allow_null=True)
     location_captured_at = serializers.CharField(required=False, allow_null=True)
     captured_at = serializers.CharField(required=False, allow_null=True)
-    radius_meters = serializers.FloatField(required=False, default=50.0, min_value=5.0, max_value=1000.0)
+    radius_meters = serializers.FloatField(required=False, default=50.0, allow_null=True)
 
     def validate(self, attrs):
         if attrs.get('accuracy_m') is not None and not attrs.get('location_accuracy_meters'):
             attrs['location_accuracy_meters'] = attrs['accuracy_m']
         if attrs.get('captured_at') is not None and not attrs.get('location_captured_at'):
             attrs['location_captured_at'] = attrs['captured_at']
+        radius = attrs.get('radius_meters')
+        if radius is not None and (radius <= 0 or radius > 500.0):
+            attrs['radius_meters'] = 50.0
         return attrs
 
 

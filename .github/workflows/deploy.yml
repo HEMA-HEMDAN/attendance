@@ -6,7 +6,6 @@ on:
       - master
       - main
 
-# Grant GITHUB_TOKEN permissions to push to GitHub Container Registry
 permissions:
   packages: write
   contents: read
@@ -88,13 +87,40 @@ jobs:
             CORS_ALLOWED_ORIGINS=https://horus.social,https://www.horus.social
             EOF
             
-            # Pull the pre-built image and deploy
+            # Login to GitHub Container Registry
             export REPO_OWNER=${GITHUB_REPOSITORY_OWNER,,}
             echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             
+            # Pull and start the new application image
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d
-            docker compose -f docker-compose.prod.yml exec -T web python manage.py migrate --noinput
+            
+            # Wait for Django container to be ready
+            echo "Waiting for attendance_web container..."
+            sleep 10
+            
+            # Apply migrations from the new code
+            docker exec attendance_web python manage.py migrate --noinput
+            
+            # ============================================================
+            # TEMPORARY ONE-TIME DATABASE RESET
+            # REMOVE THIS SECTION AFTER THIS DEPLOYMENT
+            # ============================================================
+            
+            echo "WARNING: Flushing production database..."
+            docker exec attendance_web python manage.py flush --no-input
+            
+            echo "Seeding production database..."
+            docker exec attendance_web python manage.py seed_data
+            
+            echo "Database reset and seed completed."
+            
+            # ============================================================
+            # END TEMPORARY ONE-TIME DATABASE RESET
+            # ============================================================
             
             # Clean up dangling images to save space
             docker image prune -f
+            
+            echo "Deployment completed successfully."
+

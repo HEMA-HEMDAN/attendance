@@ -1,0 +1,1 @@
+The schedule source is ../scadule.xlsx. It is retained unchanged because it is a visual timetable/change log rather than a normalized Schedule manifest. It supplies extracted staff names and course names, but no official staff codes, course codes, complete group crosswalk, or location coordinates.

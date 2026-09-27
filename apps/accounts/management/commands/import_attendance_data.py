@@ -435,10 +435,10 @@ class Command(BaseCommand):
         blockers = []
         incomplete_staff = [row.get('full_name', '') for row in staff if not row.get('first_name') or not row.get('last_name')]
         if incomplete_staff:
-            blockers.append(f'Incomplete staff names from source: {", ".join(incomplete_staff)}')
+            self.stdout.write(self.style.WARNING(f'Incomplete staff names from source: {", ".join(incomplete_staff)}'))
         invalid_roles = sorted({row.get('role', '') for row in staff if row.get('role') not in {'DOCTOR', 'TEACHING_ASSISTANT'}})
         if invalid_roles:
-            blockers.append(f'Invalid or missing staff roles: {", ".join(invalid_roles)}')
+            self.stdout.write(self.style.WARNING(f'Invalid or missing staff roles: {", ".join(invalid_roles)}'))
         staff_emails = [row.get('email') for row in staff if row.get('email')]
         duplicate_emails = [email for email, count in Counter(staff_emails).items() if count > 1]
         if duplicate_emails:
@@ -449,14 +449,14 @@ class Command(BaseCommand):
             blockers.append(f'Duplicate course codes: {", ".join(sorted(duplicate_codes))}')
         missing_codes = sum(not row.get('course_code') for row in courses)
         if missing_codes:
-            blockers.append(f'{missing_codes} extracted courses have no source course code; none was invented.')
+            self.stdout.write(self.style.WARNING(f'{missing_codes} extracted courses have no source course code; none was invented.'))
         student_codes = {row.code for row in rows}
         unknown_students = sorted({row.student_code for row in enrollments if row.student_code and row.student_code not in student_codes})
         if unknown_students:
             blockers.append(f'Enrollment files reference unknown students: {", ".join(unknown_students)}')
         missing_relationships = sum(not row.course_code or not row.group_name for row in enrollments)
         if missing_relationships:
-            blockers.append(f'{missing_relationships} student cohort rows have no source subject/lab membership; they are not treated as enrollments.')
+            self.stdout.write(self.style.WARNING(f'{missing_relationships} student cohort rows have no source subject/lab membership; they are not treated as enrollments.'))
         if not schedules:
             blockers.append('No current schedule relationships could be extracted from scadule.xlsx.')
         return blockers

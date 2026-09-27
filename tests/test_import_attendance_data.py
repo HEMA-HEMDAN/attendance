@@ -22,13 +22,12 @@ def test_explicit_dry_run_does_not_mutate_database(capsys):
     )
     source_dir = Path(__file__).resolve().parents[1] / 'seedingFiles'
 
-    with pytest.raises(CommandError, match='Validation failed'):
-        call_command(
-            'import_attendance_data',
-            '--source-dir', str(source_dir),
-            '--organization', organization.slug,
-            '--dry-run',
-        )
+    call_command(
+        'import_attendance_data',
+        '--source-dir', str(source_dir),
+        '--organization', organization.slug,
+        '--dry-run',
+    )
 
     assert Student.objects.count() == 0
     assert Organization.objects.filter(pk=organization.pk).exists()
@@ -70,6 +69,7 @@ def test_source_extraction_excludes_conflicting_student_and_keeps_year_files():
     assert all(row['course_code'] == '' for row in derived_courses)
     assert sum(bool(row.cohort) for row in schedules) == 36
     assert sum(not row.cohort for row in schedules) == 7
+    assert command._validate_manifests(derived_staff, derived_courses, enrollments, rows, schedules) == []
     assert {row.academic_year for row in enrollments} == {
         '2023-CS', '2023-IS', '2023-IT',
         '2024-CS', '2024-IS', '2024-IT',

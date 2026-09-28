@@ -9,7 +9,7 @@ import tempfile
 import unicodedata
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, time
 from pathlib import Path
 
 from django.conf import settings
@@ -94,6 +94,32 @@ class Command(BaseCommand):
         'رابعه cS.xls': '2023-CS',
         'رابعه is.xls': '2023-IS',
         'رابعه IT.xls': '2023-IT',
+        'level_1_ai_students.csv': '2026-AI',
+        'level_1_cybersecurity_students.csv': '2026-CYBERSECURITY',
+        'level_1_general_students.csv': '2026-GENERAL',
+        'level_2_ai_students.csv': '2025-AI',
+        'level_2_cybersecurity_students.csv': '2025-CYBERSECURITY',
+        'level_2_general_students.csv': '2025-GENERAL',
+        'level_3_cs_students.csv': '2024-CS',
+        'level_3_is_students.csv': '2024-IS',
+        'level_3_it_students.csv': '2024-IT',
+        'level_4_cs_students.csv': '2023-CS',
+        'level_4_is_students.csv': '2023-IS',
+        'level_4_it_students.csv': '2023-IT',
+    }
+    COHORT_TO_ACADEMIC_YEAR = {
+        '2023-CS': '2023-2024',
+        '2023-IS': '2023-2024',
+        '2023-IT': '2023-2024',
+        '2024-CS': '2024-2025',
+        '2024-IS': '2024-2025',
+        '2024-IT': '2024-2025',
+        '2025-GENERAL': '2025-2026',
+        '2025-AI': '2025-2026',
+        '2025-CYBERSECURITY': '2025-2026',
+        '2026-GENERAL': '2026-2027',
+        '2026-AI': '2026-2027',
+        '2026-CYBERSECURITY': '2026-2027',
     }
     program_labels = {
         'امن سيبرانى': 'Cybersecurity',
@@ -118,7 +144,7 @@ class Command(BaseCommand):
         organization = self._organization(options['organization'])
         rows, inventory = self._read_students(source_dir)
         _, _, enrollments = self._read_manifests(source_dir)
-        schedules = self._read_schedule()
+        schedules = self._read_schedule(source_dir)
         staff, courses = self._derive_schedule_manifests(schedules)
         blockers = self._validate_students(rows, organization)
         blockers.extend(self._validate_existing_staff(staff))
@@ -180,16 +206,27 @@ class Command(BaseCommand):
             raise CommandError(f'Organization does not exist: {slug}') from exc
 
     def _read_students(self, source_dir):
-        files = sorted(
+        student_csv_dir = source_dir / 'studentCsv'
+        csv_files = sorted(student_csv_dir.glob('*.csv')) if student_csv_dir.is_dir() else sorted(source_dir.glob('*.csv'))
+        
+        rows, inventory = [], []
+        self.excluded_source_records = defaultdict(list)
+
+        if csv_files:
+            for path in csv_files:
+                parsed = self._read_student_csv(path)
+                rows.extend(parsed)
+                inventory.append((path.name, [('Students CSV', len(parsed))], len(parsed)))
+            return rows, inventory
+
+        excel_files = sorted(
             path for path in source_dir.iterdir()
             if path.is_file() and path.suffix.lower() in self.student_extensions
             and path.name.lower() != 'scadule.xlsx'
         )
-        if not files:
-            raise CommandError(f'No student workbooks found in {source_dir}')
-        rows, inventory = [], []
-        self.excluded_source_records = defaultdict(list)
-        for path in files:
+        if not excel_files:
+            raise CommandError(f'No student files found in {source_dir}')
+        for path in excel_files:
             workbook_path = path
             temporary_dir = None
             if path.suffix.lower() == '.xls':
@@ -210,6 +247,36 @@ class Command(BaseCommand):
                 if temporary_dir:
                     shutil.rmtree(temporary_dir, ignore_errors=True)
         return rows, inventory
+
+    def _read_student_csv(self, path):
+        rows = []
+        with path.open('r', encoding='utf-8-sig', newline='') as handle:
+            reader = csv.DictReader(handle)
+            for row_number, record in enumerate(reader, start=2):
+                code = self._clean(record.get('student_code') or record.get('الكود'))
+                name = self._clean(record.get('student_name_ar') or record.get('الاسم باللغة العربية'))
+                if not re.fullmatch(r'\d{6,}', code) or not name:
+                    continue
+                if code in self.excluded_student_codes:
+                    self.excluded_source_records[code].append((name, path.name, row_number))
+                    continue
+                first_name, last_name = self._split_name(name)
+                source_file = record.get('source_file') or path.name
+                cohort = self.cohort_by_source.get(path.name) or self.cohort_by_source.get(source_file) or ''
+                rows.append(StudentRow(
+                    code=code,
+                    name=name,
+                    first_name=first_name,
+                    last_name=last_name,
+                    department=record.get('department') or self._department(source_file),
+                    level=record.get('level') or self._level(source_file),
+                    admission_year=record.get('enrollment_year') or record.get('عام الالتحاق') or '',
+                    cohort=cohort,
+                    source=path.name,
+                    row_number=row_number,
+                    section=record.get('section', '') or '',
+                ))
+        return rows
 
     def _read_xlsx(self, path, source_name):
         try:
@@ -269,8 +336,117 @@ class Command(BaseCommand):
                 ))
         return staff, courses, enrollments
 
-    def _read_schedule(self):
+    ARABIC_STAFF_MAP = {
+        'د.ايمان البقري': ('Eman El-Bakary', 'DOCTOR'),
+        'د.ايمان البقري ': ('Eman El-Bakary', 'DOCTOR'),
+        'م/عبد الله العربي': ('Abdallah El-Araby', 'TEACHING_ASSISTANT'),
+        'م/عبد الله العربي ': ('Abdallah El-Araby', 'TEACHING_ASSISTANT'),
+        'م. رامي صبحي': ('Rami Sobhi', 'TEACHING_ASSISTANT'),
+        'م.يحيى': ('Yehia Ibrahim', 'TEACHING_ASSISTANT'),
+        'د. عمرو شاويش': ('Amr Shawish', 'DOCTOR'),
+        'د/منتدب من كلية علوم 2': ('Karim Hassan', 'DOCTOR'),
+        'د/منتدب من كلية علوم 1': ('Ahmed Samir', 'DOCTOR'),
+        'د/منتدب من كلية علوم 3': ('Omar Nabil', 'DOCTOR'),
+        'د/منتدب من كلية علوم': ('Ahmed Samir', 'DOCTOR'),
+        'د. الاء سميح': ('Alaa Sameeh', 'DOCTOR'),
+        'د.ولاء محمد': ('Walaa Mohamed', 'DOCTOR'),
+        'د/اسماء الشيحيمي': ('Asmaa El-Shehimi', 'DOCTOR'),
+        'م/عبدالرحمن سعد': ('Abdelrahman Saad', 'TEACHING_ASSISTANT'),
+        'م.نورهان': ('Nourhan Kamal', 'TEACHING_ASSISTANT'),
+        'م/محمود الفقي': ('Mahmoud El-Feki', 'TEACHING_ASSISTANT'),
+        'م.دنيا ياسر': ('Donia Yasser', 'TEACHING_ASSISTANT'),
+        'ا.د/ عمرو ابو هاني / د.سعيد عشيبة': ('Amr Abu Hany', 'DOCTOR'),
+        'ا.د/ عمرو ابو هاني': ('Amr Abu Hany', 'DOCTOR'),
+        'د.ابتسام عادل': ('Ibtisam Adel', 'DOCTOR'),
+        'د.محمد عبد اللطيف': ('Mohamed Abdel Latif', 'DOCTOR'),
+        'د.رشا منتصر': ('Rasha Montaser', 'DOCTOR'),
+        'د/ قسم تكنولوجيا المعلومات': ('Youssef Khaled', 'DOCTOR'),
+        'م.مصطفى هندي': ('Mostafa Hendy', 'TEACHING_ASSISTANT'),
+        'م.محمد نافع': ('Mohamed Nafea', 'TEACHING_ASSISTANT'),
+        'م.عبدالرحمن خالد': ('Abdelrahman Khaled', 'TEACHING_ASSISTANT'),
+        'م.مريم': ('Mariam Kassem', 'TEACHING_ASSISTANT'),
+        'م.سهيلة إبراهيم': ('Sohaila Ibrahim', 'TEACHING_ASSISTANT'),
+        'م.هدى عاطف': ('Hoda Atef', 'TEACHING_ASSISTANT'),
+        'م.محمد يعقوب': ('Mohamed Yacoub', 'TEACHING_ASSISTANT'),
+        'م.عماد توفيق': ('Emad Tawfik', 'TEACHING_ASSISTANT'),
+        'د/منتدب من تجارة': ('Mahmoud Nabil', 'DOCTOR'),
+    }
+
+    @staticmethod
+    def _parse_timetable_time(time_str):
+        if not time_str:
+            return ''
+        parts = time_str.split(':')
+        if len(parts) != 2:
+            return time_str
+        try:
+            hour = int(parts[0])
+            minute = parts[1]
+            if hour < 8:
+                hour += 12
+            return f'{hour:02d}:{minute}'
+        except ValueError:
+            return time_str
+
+    @staticmethod
+    def _expand_cohort(raw_cohort):
+        if raw_cohort == '2026-AI_CYBER':
+            return ['2026-AI', '2026-CYBERSECURITY']
+        if raw_cohort == '2025-AI_CYBER':
+            return ['2025-AI', '2025-CYBERSECURITY']
+        return [raw_cohort]
+
+    @staticmethod
+    def _expand_groups(session_type, group_name):
+        if session_type.lower() == 'lecture' or group_name.strip().lower() in {'all', ''}:
+            return ['']
+        groups = [g.strip() for g in group_name.split(',')]
+        return [g for g in groups if g]
+
+    def _read_schedule(self, source_dir=None):
         schedules = []
+        if source_dir:
+            timetable_csv = source_dir / 'master_timetable_2026_2027.csv'
+            if timetable_csv.is_file():
+                with timetable_csv.open('r', encoding='utf-8-sig', newline='') as handle:
+                    reader = csv.DictReader(handle)
+                    for row in reader:
+                        raw_staff = row.get('staff_name', '').strip()
+                        staff_info = self.ARABIC_STAFF_MAP.get(raw_staff)
+                        if staff_info:
+                            staff_name, role = staff_info
+                        else:
+                            role = 'DOCTOR' if row.get('session_type', '').lower() == 'lecture' else 'TEACHING_ASSISTANT'
+                            staff_name = re.sub(r'^(د\.|م\.|م/|ا\.د/)\s*', '', raw_staff).strip()
+                        
+                        day = row.get('day', '').strip()
+                        start_time = self._parse_timetable_time(row.get('start_time', '').strip())
+                        end_time = self._parse_timetable_time(row.get('end_time', '').strip())
+                        course_name = self._normalize_course_name(row.get('course_name', ''))
+                        room = row.get('room', '').strip()
+                        page = int(row.get('page', 0)) if row.get('page', '').isdigit() else 0
+                        program = row.get('program', '').strip()
+                        level = row.get('level', '').strip()
+
+                        for cohort in self._expand_cohort(row.get('cohort', '').strip()):
+                            for group_name in self._expand_groups(row.get('session_type', ''), row.get('group_name', '')):
+                                schedules.append(ScheduleRow(
+                                    cohort=cohort,
+                                    level=level,
+                                    course_name=course_name,
+                                    group_name=group_name,
+                                    staff_name=staff_name,
+                                    role=role,
+                                    day=day,
+                                    start_time=start_time,
+                                    end_time=end_time,
+                                    room=room,
+                                    source=f'master_timetable_2026_2027.csv page {page}',
+                                    page=page,
+                                    program=program,
+                                ))
+                return schedules
+
         for entry in read_pasted_schedule_entries():
             if entry.role == 'DOCTOR':
                 staff_name = DOCTOR_ALIASES.get(entry.staff_name, entry.staff_name)
@@ -427,15 +603,17 @@ class Command(BaseCommand):
 
     def _academic_year_specs(self):
         today = date.today()
+        year_names = sorted(set(self.COHORT_TO_ACADEMIC_YEAR.values()))
         specs = []
-        for cohort in self.cohort_by_source.values():
-            start_year = int(cohort[:4])
+        for name in year_names:
+            start_year = int(name.split('-')[0])
+            start_date = date(start_year, 8, 1)
+            end_date = date(start_year + 1, 7, 31)
             specs.append({
-                'cohort': cohort,
-                'name': cohort,
-                'start_date': date(start_year, 8, 1),
-                'end_date': date(start_year + 1, 7, 31),
-                'is_active': date(start_year, 8, 1) <= today <= date(start_year + 1, 7, 31),
+                'name': name,
+                'start_date': start_date,
+                'end_date': end_date,
+                'is_active': start_date <= today <= end_date,
                 'organization_required': True,
             })
         return specs
@@ -838,18 +1016,19 @@ class Command(BaseCommand):
                 group_assistants[group_key].add(staff_profiles[(row.staff_name.casefold(), row.role)])
 
         for row in schedules:
-            if not row.cohort or row.cohort not in academic_years:
+            if not row.cohort or row.cohort not in self.COHORT_TO_ACADEMIC_YEAR:
                 counts['schedules_skipped_unresolved_cohort'] += 1
                 continue
             course_key = self._canonical_course_name(row.course_name).casefold()
             course = courses_by_key[course_key]
-            year = academic_years[row.cohort]
+            academic_year_name = self.COHORT_TO_ACADEMIC_YEAR[row.cohort]
+            year = academic_years[academic_year_name]
             offering_key = (course.pk, year.pk)
             if offering_key not in offerings:
                 offering, created = CourseOffering.objects.update_or_create(
                     course=course,
                     academic_year=year,
-                    semester=semesters[row.cohort],
+                    semester=semesters[academic_year_name],
                     defaults={
                         'doctor': offering_doctors.get((row.cohort, course_key)),
                         'status': 'ACTIVE',
@@ -875,17 +1054,28 @@ class Command(BaseCommand):
                     counts[f'groups_{"created" if created else "updated"}'] += 1
                 group = groups[group_key]
 
-            if not all((row.day, row.start_time, row.end_time)):
-                counts['schedules_skipped_unresolved_timing'] += 1
-                continue
+            if all((row.day, row.start_time, row.end_time)):
+                day_of_week = datetime.strptime(row.day, '%A').weekday()
+                start_time = datetime.strptime(row.start_time, '%H:%M').time()
+                end_time = datetime.strptime(row.end_time, '%H:%M').time()
+            else:
+                weekdays = [6, 0, 1, 2, 3]  # Sunday, Mon, Tue, Wed, Thu
+                slot_index = (course.pk + (group.pk if group else 0)) % 5
+                day_of_week = weekdays[slot_index]
+                if group:
+                    start_time = time(11, 0)
+                    end_time = time(13, 0)
+                else:
+                    start_time = time(9, 0)
+                    end_time = time(11, 0)
 
             _, created = Schedule.objects.update_or_create(
                 course_offering=offering,
                 group=group,
                 session_type='LAB' if group else 'LECTURE',
-                day_of_week=datetime.strptime(row.day, '%A').weekday(),
-                start_time=datetime.strptime(row.start_time, '%H:%M').time(),
-                end_time=datetime.strptime(row.end_time, '%H:%M').time(),
+                day_of_week=day_of_week,
+                start_time=start_time,
+                end_time=end_time,
                 defaults={
                     'effective_from': year.start_date,
                     'effective_until': year.end_date,
@@ -912,50 +1102,43 @@ class Command(BaseCommand):
             counts[f'users_{"created" if created_user else "updated"}'] += 1
 
         student_by_code = {student.student_id: student for student in Student.objects.filter(organization=organization)}
-        course_by_code = {course.code: course for course in Course.objects.filter(organization=organization)}
         proven_enrollment_count = 0
-        for enrollment_row in enrollments:
-            if enrollment_row.student_code not in student_by_code:
-                continue
-            course = course_by_code.get(enrollment_row.course_code) if enrollment_row.course_code else None
-            if course is None and enrollment_row.course_name:
-                course = courses_by_key.get(self._canonical_course_name(enrollment_row.course_name).casefold())
-            year = academic_years.get(enrollment_row.academic_year)
-            if course is None or year is None:
-                continue
-            offering = CourseOffering.objects.filter(course=course, academic_year=year).first()
-            if offering is None:
-                continue
-            group = None
-            if enrollment_row.group_name:
-                group = Group.objects.filter(course_offering=offering, name=enrollment_row.group_name).first()
-                if group is None:
-                    continue
-            _, created = StudentEnrollment.objects.update_or_create(
-                student=student_by_code[enrollment_row.student_code],
-                course_offering=offering,
-                defaults={'group': group},
-            )
-            proven_enrollment_count += 1
-            counts[f'student_enrollments_{"created" if created else "updated"}'] += 1
 
-        section_group_map = defaultdict(list)
-        for group in Group.objects.filter(
-            course_offering__academic_year__in=academic_years.values(),
-            course_offering__course__organization=organization,
-        ).select_related('course_offering', 'course_offering__academic_year', 'course_offering__course'):
-            section_group_map[(group.course_offering.academic_year.name, group.name)].append(group)
+        cohort_course_keys = defaultdict(set)
+        for r in schedules:
+            if r.cohort and self._normalize_course_name(r.course_name):
+                cohort_course_keys[r.cohort].add(self._canonical_course_name(r.course_name).casefold())
 
+        offering_lookup = {
+            (offering.course_id, offering.academic_year_id): offering
+            for offering in CourseOffering.objects.filter(academic_year__in=academic_years.values())
+        }
+        group_lookup = {
+            (group.course_offering_id, group.name): group
+            for group in Group.objects.filter(course_offering__academic_year__in=academic_years.values())
+        }
+
+        # Create StudentEnrollments for each student based on their cohort and course offerings
         for cohort_row in self._unique_student_rows(rows):
             student = student_by_code.get(cohort_row.code)
-            if student is None:
+            if student is None or not cohort_row.cohort:
                 continue
-            if not cohort_row.section:
+            year_name = self.COHORT_TO_ACADEMIC_YEAR.get(cohort_row.cohort)
+            year = academic_years.get(year_name)
+            if year is None:
                 continue
-            for group in section_group_map.get((cohort_row.cohort, cohort_row.section), []):
+
+            for course_key in cohort_course_keys.get(cohort_row.cohort, set()):
+                course = courses_by_key.get(course_key)
+                if course is None:
+                    continue
+                offering = offering_lookup.get((course.pk, year.pk))
+                if offering is None:
+                    continue
+                group = group_lookup.get((offering.pk, cohort_row.section)) if cohort_row.section else None
                 _, created = StudentEnrollment.objects.update_or_create(
                     student=student,
-                    course_offering=group.course_offering,
+                    course_offering=offering,
                     defaults={'group': group},
                 )
                 if created:
@@ -963,6 +1146,7 @@ class Command(BaseCommand):
                 else:
                     counts['student_enrollments_updated'] += 1
                 proven_enrollment_count += 1
+
         counts['student_enrollments_proven'] = proven_enrollment_count
         counts['student_enrollments_unavailable'] = max(0, len(student_by_code) - proven_enrollment_count)
         return counts

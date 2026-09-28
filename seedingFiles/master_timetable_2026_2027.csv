@@ -1,0 +1,172 @@
+﻿page,level,program,cohort,day,start_time,end_time,course_name,session_type,group_name,staff_name,room
+1,Level 1,General,2026-GENERAL,Monday,09:00,11:00,Electronics,Lecture,All,د.ايمان البقري,قاعة 1
+1,Level 1,General,2026-GENERAL,Monday,11:00,12:00,Introduction To Computer Science,Section,Section 1,م/عبد الله العربي,معمل 2
+1,Level 1,General,2026-GENERAL,Monday,01:00,02:00,Introduction To Computer Science,Section,Section 1,م/عبد الله العربي,معمل 1
+1,Level 1,General,2026-GENERAL,Monday,04:00,05:00,Introduction To Computer Science,Section,Section 5,م/عبد الله العربي,معمل 1
+1,Level 1,General,2026-GENERAL,Tuesday,09:00,10:00,Introduction To Computer Science,Section,Section 4,م. رامي صبحي,معمل 2
+1,Level 1,General,2026-GENERAL,Tuesday,09:00,10:00,Introduction To Computer Science,Section,Section 8,م/عبد الله العربي,معمل 4
+1,Level 1,General,2026-GENERAL,Tuesday,10:00,12:00,Electronics,Section,"Section 1, Section 2, Section 3",م.يحيى,مدرج 2
+1,Level 1,General,2026-GENERAL,Tuesday,11:00,12:00,Introduction To Computer Science,Section,Section 3,م. رامي صبحي,معمل 2
+1,Level 1,General,2026-GENERAL,Tuesday,11:00,12:00,Introduction To Computer Science,Section,Section 6,م/عبد الله العربي,معمل 1
+1,Level 1,General,2026-GENERAL,Tuesday,12:00,02:00,Electronics,Section,"Section 4, Section 5, Section 6",م.يحيى,مدرج 2
+1,Level 1,General,2026-GENERAL,Tuesday,01:00,02:00,Introduction To Computer Science,Section,Section 7,م. رامي صبحي,معمل 7
+1,Level 1,General,2026-GENERAL,Tuesday,02:00,03:00,Introduction To Computer Science,Section,Section 9,م/عبد الله العربي,معمل 9
+1,Level 1,General,2026-GENERAL,Tuesday,02:00,04:00,Electronics,Section,"Section 7, Section 8, Section 9",م.يحيى,مدرج 2
+1,Level 1,General,2026-GENERAL,Tuesday,04:00,05:00,Introduction To Computer Science,Section,Section 2,م. رامي صبحي,معمل 8
+1,Level 1,General,2026-GENERAL,Wednesday,09:00,11:00,Introduction To Computer Science,Lecture,All,د. عمرو شاويش,قاعة 1
+1,Level 1,General,2026-GENERAL,Wednesday,11:00,01:00,Physics,Lecture,All,د/منتدب من كلية علوم 2,قاعة 1
+1,Level 1,General,2026-GENERAL,Wednesday,01:00,03:00,Math1,Lecture,All,د/منتدب من كلية علوم 1,قاعة 1
+1,Level 1,General,2026-GENERAL,Wednesday,03:00,05:00,Math 0,Lecture,All,د/منتدب من كلية علوم,مدرج 1
+1,Level 1,General,2026-GENERAL,Thursday,09:00,11:00,Interpersonal Communication,Lecture,All,د. الاء سميح,قاعة 1
+1,Level 1,General,2026-GENERAL,Thursday,11:00,01:00,Computer Law,Lecture,All,د.ولاء محمد,قاعة 1
+1,Level 1,General,2026-GENERAL,Thursday,01:00,03:00,General English Language,Lecture,All,د/اسماء الشيحيمي,قاعة 1
+2,Level 2,General,2025-GENERAL,Saturday,09:00,10:00,Computer Architecture,Section,Section 1,م/عبدالرحمن سعد,معمل 4
+2,Level 2,General,2025-GENERAL,Saturday,09:00,10:00,Data Communications,Section,Section 2,م.نورهان,معمل 3
+2,Level 2,General,2025-GENERAL,Saturday,09:00,10:00,Data Communications,Section,Section 3,م/محمود الفقي,معمل 2
+2,Level 2,General,2025-GENERAL,Saturday,09:00,11:00,Computer Architecture,Section,Section 6,م.دنيا ياسر,معمل 5
+2,Level 2,General,2025-GENERAL,Saturday,10:00,11:00,Data Communications,Section,Section 5,م.نورهان,معمل 3
+2,Level 2,General,2025-GENERAL,Saturday,10:00,11:00,Object Oriented Programming,Section,Section 4,م.يحيى,معمل 5
+2,Level 2,General,2025-GENERAL,Saturday,11:00,12:00,Data Communications,Section,Section 7,م/محمود الفقي,معمل 1
+2,Level 2,General,2025-GENERAL,Saturday,12:00,02:00,Social Context Of Computing,Lecture,All,ا.د/ عمرو ابو هاني / د.سعيد عشيبة,قاعة 1
+2,Level 2,General,2025-GENERAL,Saturday,01:00,02:00,Data Communications,Section,Section 6,م/محمود الفقي,معمل 2
+2,Level 2,General,2025-GENERAL,Saturday,01:00,02:00,Computer Architecture,Section,Section 7,م/عبدالرحمن سعد,معمل 3
+2,Level 2,General,2025-GENERAL,Saturday,02:00,03:00,Data Communications,Section,Section 1,م.نورهان,معمل 5
+2,Level 2,General,2025-GENERAL,Saturday,02:00,03:00,Object Oriented Programming,Section,Section 2,م.دنيا ياسر,معمل 4
+2,Level 2,General,2025-GENERAL,Saturday,04:00,05:00,Computer Architecture,Section,Section 5,م/عبدالرحمن سعد,معمل 5
+2,Level 2,General,2025-GENERAL,Sunday,09:00,11:00,Databases,Lecture,All,د.ابتسام عادل,قاعة 1
+2,Level 2,General,2025-GENERAL,Sunday,11:00,01:00,Social Context Of Computing,Lecture,All,ا.د/ عمرو ابو هاني / د.سعيد عشيبة,قاعة 1
+2,Level 2,General,2025-GENERAL,Sunday,01:00,02:00,Data Communications,Section,Section 4,م.نورهان,معمل 3
+2,Level 2,General,2025-GENERAL,Sunday,01:00,02:00,Object Oriented Programming,Section,Section 5,م.دنيا ياسر,معمل 5
+2,Level 2,General,2025-GENERAL,Sunday,01:00,02:00,Databases,Section,Section 7,م.محمد نافع,معمل 2
+2,Level 2,General,2025-GENERAL,Sunday,02:00,03:00,Object Oriented Programming,Section,Section 1,م.عبدالرحمن خالد,معمل 4
+2,Level 2,General,2025-GENERAL,Sunday,02:00,03:00,Databases,Section,Section 2,م.مصطفى هندي,معمل 1
+2,Level 2,General,2025-GENERAL,Sunday,03:00,04:00,Object Oriented Programming,Section,Section 3,م.عبدالرحمن خالد,معمل 6
+2,Level 2,General,2025-GENERAL,Sunday,03:00,04:00,Databases,Section,Section 4,م.محمد نافع,معمل 5
+2,Level 2,General,2025-GENERAL,Sunday,03:00,04:00,Databases,Section,Section 6,م.مصطفى هندي,معمل 2
+2,Level 2,General,2025-GENERAL,Sunday,04:00,05:00,Computer Architecture,Section,Section 2,م.دنيا ياسر,معمل 7
+2,Level 2,General,2025-GENERAL,Monday,09:00,10:00,Databases,Section,Section 5,م.محمد نافع,معمل 3
+2,Level 2,General,2025-GENERAL,Monday,09:00,10:00,Object Oriented Programming,Section,Section 6,م.عبدالرحمن خالد,معمل 4
+2,Level 2,General,2025-GENERAL,Monday,10:00,12:00,Computer Architecture,Lecture,All,د.رشا منتصر,قاعة 1
+2,Level 2,General,2025-GENERAL,Monday,12:00,02:00,Math III,Lecture,All,د/منتدب من كلية علوم 3,قاعة 1
+2,Level 2,General,2025-GENERAL,Monday,04:00,05:00,Databases,Section,Section 1,م.مصطفى هندي,معمل 3
+2,Level 2,General,2025-GENERAL,Monday,04:00,05:00,Databases,Section,Section 3,م.مصطفى هندي,معمل 2
+2,Level 2,General,2025-GENERAL,Monday,04:00,05:00,Computer Architecture,Section,Section 5,م/عبدالرحمن سعد,معمل 4
+2,Level 2,General,2025-GENERAL,Tuesday,09:00,11:00,Data Communications,Lecture,All,د/ قسم تكنولوجيا المعلومات,قاعة 1
+2,Level 2,General,2025-GENERAL,Tuesday,11:00,01:00,Object Oriented Programming,Lecture,All,د.محمد عبد اللطيف,قاعة 1
+2,Level 2,General,2025-GENERAL,Tuesday,01:00,03:00,Probability and Statisctics,Lecture,All,د/منتدب من كلية علوم 1,قاعة 1
+2,Level 2,General,2025-GENERAL,Tuesday,03:00,04:00,Computer Architecture,Section,Section 4,م/عبدالرحمن سعد,معمل 7
+2,Level 2,General,2025-GENERAL,Tuesday,04:00,05:00,Object Oriented Programming,Section,Section 7,م/عبد الله العربي,معمل 1
+3,Level 3,Computer Science,2024-CS,Sunday,09:00,10:00,Image Processing,Section,Section 1,م.مريم,معمل 3
+3,Level 3,Computer Science,2024-CS,Sunday,09:00,11:00,Neural Networks,Section,Section 2,م.دنيا ياسر,معمل 4
+3,Level 3,Computer Science,2024-CS,Sunday,11:00,12:00,Neural Networks,Section,Section 1,م.دنيا ياسر,معمل 1
+3,Level 3,Computer Science,2024-CS,Sunday,11:00,12:00,Computer Graphics Fundamentals,Section,Section 2,م.عبدالرحمن خالد,معمل 4
+3,Level 3,Computer Science,2024-CS,Sunday,01:00,03:00,Digital Signal Processing,Lecture,All,د.ايمان البقري,قاعة 1
+3,Level 3,Computer Science,2024-CS,Sunday,03:00,05:00,Image Processing,Lecture,All,د.ابتسام عادل,مدرج 1
+3,Level 3,Computer Science,2024-CS,Monday,09:00,11:00,Algorithm Design and Analysis,Lecture,All,د. عمرو شاويش,قاعة دراسية 1
+3,Level 3,Computer Science,2024-CS,Monday,11:00,12:00,Software Engineering,Section,Section 2,م.هدى عاطف,معمل 4
+3,Level 3,Computer Science,2024-CS,Monday,01:00,02:00,Digital Signal Processing,Section,Section 2,م.سهيلة إبراهيم,معمل 4
+3,Level 3,Computer Science,2024-CS,Monday,01:00,03:00,Computer Graphics Fundamentals,Section,Section 1,م.عبدالرحمن خالد,معمل 6
+3,Level 3,Computer Science,2024-CS,Monday,03:00,04:00,Digital Signal Processing,Section,Section 1,م.سهيلة إبراهيم,معمل 5
+3,Level 3,Computer Science,2024-CS,Tuesday,09:00,11:00,Neural Networks,Lecture,All,د.محمد عبد اللطيف,قاعة دراسية 1
+3,Level 3,Computer Science,2024-CS,Tuesday,11:00,12:00,Algorithm Design and Analysis,Section,Section 1,م/محمود الفقي,معمل 3
+3,Level 3,Computer Science,2024-CS,Tuesday,11:00,12:00,Image Processing,Section,Section 2,م.مريم,معمل 4
+3,Level 3,Computer Science,2024-CS,Tuesday,01:00,03:00,Algorithm Design and Analysis,Section,Section 2,م/محمود الفقي,معمل 5
+3,Level 3,Computer Science,2024-CS,Tuesday,03:00,05:00,Software Engineering,Lecture,All,ا.د/ عمرو ابو هاني,قاعة 1
+3,Level 3,Computer Science,2024-CS,Thursday,09:00,11:00,Software Engineering,Section,Section 1,م.هدى عاطف,معمل 3
+3,Level 3,Computer Science,2024-CS,Thursday,11:00,01:00,Computer Graphics Fundamentals,Lecture,All,د.رشا منتصر,مدرج 2
+4,Level 3,Information Systems,2024-IS,Saturday,09:00,11:00,Decision Support Systems,Lecture,All,د.ابتسام عادل,مدرج 1
+4,Level 3,Information Systems,2024-IS,Saturday,01:00,03:00,Decision Support Systems,Section,Section 1,م.مريم,معمل 1
+4,Level 3,Information Systems,2024-IS,Saturday,03:00,05:00,Geographic information system,Section,Section 2,م.مريم,معمل 3
+4,Level 3,Information Systems,2024-IS,Sunday,09:00,11:00,Introduction To Data Science,Lecture,All,د. الاء سميح,مدرج 2
+4,Level 3,Information Systems,2024-IS,Sunday,11:00,01:00,Geographic information system,Lecture,All,د. الاء سميح,مدرج 2
+4,Level 3,Information Systems,2024-IS,Sunday,01:00,03:00,Decision Support Systems,Section,Section 2,م.مريم,معمل 6
+4,Level 3,Information Systems,2024-IS,Sunday,03:00,05:00,Introduction To Data Science,Section,Section 1,م.محمد يعقوب,معمل 4
+4,Level 3,Information Systems,2024-IS,Monday,09:00,10:00,Human Computer Interaction,Section,Section 1,م.مصطفى هندي,معمل 7
+4,Level 3,Information Systems,2024-IS,Monday,09:00,10:00,Introduction To Data Science,Section,Section 2,م.محمد يعقوب,معمل 6
+4,Level 3,Information Systems,2024-IS,Monday,11:00,12:00,Human Computer Interaction,Section,Section 2,م.مصطفى هندي,معمل 1
+4,Level 3,Information Systems,2024-IS,Monday,01:00,03:00,Software Engineering,Section,Section 1,م.هدى عاطف,معمل 5
+4,Level 3,Information Systems,2024-IS,Monday,01:00,03:00,Software Engineering,Section,Section 2,م.محمد يعقوب,معمل 1
+4,Level 3,Information Systems,2024-IS,Tuesday,09:00,10:00,Geographic information system,Section,Section 1,م.مريم,معمل 3
+4,Level 3,Information Systems,2024-IS,Tuesday,10:00,12:00,Human Computer Interaction,Lecture,All,د/ قسم تكنولوجيا المعلومات,مدرج 2
+4,Level 3,Information Systems,2024-IS,Tuesday,12:00,02:00,Information Security,Lecture,All,د/ قسم تكنولوجيا المعلومات,مدرج 1
+4,Level 3,Information Systems,2024-IS,Tuesday,02:00,05:00,Software Engineering,Lecture,All,ا.د/ عمرو ابو هاني,قاعة 1
+5,Level 3,Information Technology,2024-IT,Saturday,09:00,10:00,Image Processing,Section,Section 2,م.مريم,معمل 1
+5,Level 3,Information Technology,2024-IT,Saturday,10:00,11:00,Image Processing,Section,Section 2,م.مريم,معمل 7
+5,Level 3,Information Technology,2024-IT,Saturday,11:00,12:00,Image Processing,Section,Section 1,م.مريم,معمل 7
+5,Level 3,Information Technology,2024-IT,Saturday,11:00,12:00,Digital Signal Processing,Section,Section 2,م.سهيلة إبراهيم,معمل 4
+5,Level 3,Information Technology,2024-IT,Saturday,01:00,03:00,Digital Signal Processing,Section,Section 1,م.سهيلة إبراهيم,معمل 7
+5,Level 3,Information Technology,2024-IT,Saturday,03:00,05:00,Software Engineering,Section,Section 1,م/محمود الفقي,معمل 4
+5,Level 3,Information Technology,2024-IT,Sunday,09:00,10:00,Human Computer Interaction,Section,Section 2,م.مصطفى هندي,معمل 5
+5,Level 3,Information Technology,2024-IT,Sunday,10:00,12:00,Human Computer Interaction,Section,Section 1,م.مصطفى هندي,معمل 3
+5,Level 3,Information Technology,2024-IT,Sunday,11:00,01:00,Software Engineering,Section,Section 2,م.محمد يعقوب,معمل 2
+5,Level 3,Information Technology,2024-IT,Sunday,01:00,03:00,Digital Signal Processing,Lecture,All,د.ايمان البقري,قاعة 1
+5,Level 3,Information Technology,2024-IT,Sunday,03:00,05:00,Image Processing,Lecture,All,د.ابتسام عادل,مدرج 1
+5,Level 3,Information Technology,2024-IT,Tuesday,09:00,10:00,Web Programming,Section,Section 1,م/عبدالرحمن سعد,معمل 1
+5,Level 3,Information Technology,2024-IT,Tuesday,11:00,01:00,Human Computer Interaction,Lecture,All,د/ قسم تكنولوجيا المعلومات,مدرج 2
+5,Level 3,Information Technology,2024-IT,Tuesday,01:00,03:00,Web Programming,Section,Section 2,م/عبدالرحمن سعد,معمل 6
+5,Level 3,Information Technology,2024-IT,Tuesday,03:00,05:00,Software Engineering,Lecture,All,ا.د/ عمرو ابو هاني,قاعة 1
+5,Level 3,Information Technology,2024-IT,Thursday,09:00,11:00,Web Programming,Lecture,All,د.رشا منتصر,مدرج 2
+5,Level 3,Information Technology,2024-IT,Thursday,11:00,12:00,Network Programming,Section,Section 1,م.هدى عاطف,معمل 1
+5,Level 3,Information Technology,2024-IT,Thursday,01:00,03:00,Network Programming,Lecture,All,د.ولاء محمد,مدرج 1
+5,Level 3,Information Technology,2024-IT,Thursday,03:00,05:00,Network Programming,Section,Section 2,م.هدى عاطف,معمل 1
+6,Level 4,Computer Science,2023-CS,Saturday,09:00,10:00,Speech processing,Section,Section 1,م.سهيلة إبراهيم,معمل 7
+6,Level 4,Computer Science,2023-CS,Saturday,10:00,12:00,Machine Learning,Section,Section 1,م.دنيا ياسر,معمل 2
+6,Level 4,Computer Science,2023-CS,Saturday,01:00,03:00,Advanced Database,Lecture,All,د.ابتسام عادل,مدرج 1
+6,Level 4,Computer Science,2023-CS,Saturday,03:00,05:00,Wireless and Mobile computing,Section,Section 1,م.نورهان,معمل 1
+6,Level 4,Computer Science,2023-CS,Sunday,09:00,10:00,Data mining,Section,Section 1,م.محمد يعقوب,معمل 8
+6,Level 4,Computer Science,2023-CS,Sunday,10:00,12:00,Advanced Database,Section,Section 1,م.عماد توفيق,معمل 6
+6,Level 4,Computer Science,2023-CS,Sunday,01:00,03:00,Programming language design,Section,Section 1,م. رامي صبحي,معمل 8
+6,Level 4,Computer Science,2023-CS,Sunday,03:00,05:00,Wireless and Mobile computing,Lecture,All,د.ايمان البقري,قاعة دراسية 1
+6,Level 4,Computer Science,2023-CS,Monday,09:00,11:00,Machine Learning,Lecture,All,د.محمد عبد اللطيف,مدرج 1
+6,Level 4,Computer Science,2023-CS,Monday,11:00,01:00,Programming language design,Lecture,All,د. عمرو شاويش,قاعة دراسية 1
+6,Level 4,Computer Science,2023-CS,Monday,01:00,03:00,Data mining,Lecture,All,د.رشا منتصر,مدرج 2
+6,Level 4,Computer Science,2023-CS,Monday,03:00,05:00,Speech processing,Lecture,All,د/ قسم تكنولوجيا المعلومات,مدرج 2
+7,Level 4,Information Technology,2023-IT,Saturday,09:00,10:00,Network analysis and Design,Lecture,All,د.ولاء محمد,مدرج 2
+7,Level 4,Information Technology,2023-IT,Saturday,10:00,12:00,Enterprise Architecture,Lecture,All,د.ولاء محمد,مدرج 2
+7,Level 4,Information Technology,2023-IT,Saturday,01:00,03:00,Advanced Database,Lecture,All,د.ابتسام عادل,مدرج 1
+7,Level 4,Information Technology,2023-IT,Saturday,03:00,05:00,Network analysis and Design,Section,Section 1,م.سهيلة إبراهيم,معمل 7
+7,Level 4,Information Technology,2023-IT,Sunday,09:00,11:00,Wireless and Mobile computing,Section,Section 1,م.نورهان,معمل 1
+7,Level 4,Information Technology,2023-IT,Sunday,11:00,01:00,Enterprise Architecture,Section,Section 1,م. رامي صبحي,معمل 7
+7,Level 4,Information Technology,2023-IT,Sunday,01:00,03:00,Advanced Database,Section,Section 1,م.عماد توفيق,معمل 7
+7,Level 4,Information Technology,2023-IT,Sunday,03:00,05:00,Wireless and Mobile computing,Lecture,All,د.ايمان البقري,قاعة دراسية 1
+7,Level 4,Information Technology,2023-IT,Monday,11:00,01:00,Speech processing,Section,Section 1,م.سهيلة إبراهيم,معمل 8
+7,Level 4,Information Technology,2023-IT,Monday,03:00,05:00,Speech processing,Lecture,All,د/ قسم تكنولوجيا المعلومات,مدرج 2
+8,Level 4,Information Systems,2023-IS,Saturday,09:00,11:00,Information retrival,Section,Section 1,م.عماد توفيق,معمل 8
+8,Level 4,Information Systems,2023-IS,Saturday,11:00,01:00,Enterprise Architecture,Lecture,All,د.ولاء محمد,مدرج 2
+8,Level 4,Information Systems,2023-IS,Saturday,01:00,03:00,Advanced Database,Lecture,All,د.ابتسام عادل,مدرج 1
+8,Level 4,Information Systems,2023-IS,Saturday,03:00,05:00,Advanced Database,Section,Section 1,م.عماد توفيق,معمل 2
+8,Level 4,Information Systems,2023-IS,Monday,09:00,11:00,Enterprise Architecture,Section,Section 1,م/عبد الله العربي,معمل 5
+8,Level 4,Information Systems,2023-IS,Monday,11:00,01:00,Database Administration,Section,Section 1,م.محمد نافع,معمل 7
+8,Level 4,Information Systems,2023-IS,Monday,01:00,03:00,Data mining,Lecture,All,د.رشا منتصر,مدرج 2
+8,Level 4,Information Systems,2023-IS,Monday,03:00,05:00,Data mining,Section,Section 1,م.محمد يعقوب,معمل 7
+8,Level 4,Information Systems,2023-IS,Thursday,11:00,01:00,Database Administration,Lecture,All,د. الاء سميح,قاعة دراسية 1
+8,Level 4,Information Systems,2023-IS,Thursday,01:00,03:00,Information retrival,Lecture,All,ا.د/ عمرو ابو هاني,مدرج 2
+9,Level 1,AI and Cybersecurity,2026-AI_CYBER,Monday,09:00,11:00,Computer Networks,Section,Section 1,م.هدى عاطف,معمل 2
+9,Level 1,AI and Cybersecurity,2026-AI_CYBER,Monday,09:00,11:00,Fundamentals of Programming,Section,Section 2,م/عبدالرحمن سعد,معمل 1
+9,Level 1,AI and Cybersecurity,2026-AI_CYBER,Monday,11:00,01:00,Digital circuits,Lecture,All,د.ايمان البقري,مدرج 1
+9,Level 1,AI and Cybersecurity,2026-AI_CYBER,Monday,01:00,03:00,Creative Thinking and Problem Solving,Lecture,All,ا.د/ عمرو ابو هاني,قاعة دراسية 1
+9,Level 1,AI and Cybersecurity,2026-AI_CYBER,Monday,03:00,05:00,Fundamentals of Programming,Lecture,All,د.محمد عبد اللطيف,مدرج 1
+9,Level 1,AI and Cybersecurity,2026-AI_CYBER,Wednesday,09:00,11:00,Mathematics-1,Lecture,All,د/منتدب من كلية علوم,مدرج 1
+9,Level 1,AI and Cybersecurity,2026-AI_CYBER,Wednesday,11:00,01:00,Communication & Negotiation Skills,Lecture,All,د/منتدب من تجارة,مدرج 1
+9,Level 1,AI and Cybersecurity,2026-AI_CYBER,Wednesday,03:00,05:00,Math 0,Lecture,All,د/منتدب من كلية علوم,مدرج 1
+9,Level 1,AI and Cybersecurity,2026-AI_CYBER,Thursday,09:00,11:00,Computer Networks,Lecture,All,د.ولاء محمد,مدرج 1
+9,Level 1,AI and Cybersecurity,2026-AI_CYBER,Thursday,11:00,01:00,General English Language,Lecture,All,د/اسماء الشيحيمي,مدرج 1
+9,Level 1,AI and Cybersecurity,2026-AI_CYBER,Thursday,01:00,02:00,Fundamentals of Programming,Section,Section 1,م.يحيى,معمل 1
+9,Level 1,AI and Cybersecurity,2026-AI_CYBER,Thursday,02:00,03:00,Computer Networks,Section,Section 2,م.هدى عاطف,معمل 2
+9,Level 1,AI and Cybersecurity,2026-AI_CYBER,Thursday,03:00,05:00,Digital circuits,Section,"Section 1, Section 2",م.يحيى,مدرج 1
+10,Level 2,AI and Cybersecurity,2025-AI_CYBER,Sunday,09:00,10:00,Database Systems,Section,Section 1,م.محمد نافع,معمل 1
+10,Level 2,AI and Cybersecurity,2025-AI_CYBER,Sunday,09:00,10:00,Information Security,Section,Section 2,م.عماد توفيق,معمل 2
+10,Level 2,AI and Cybersecurity,2025-AI_CYBER,Sunday,10:00,12:00,Logic Design,Lecture,All,د.ابتسام عادل,مدرج 1
+10,Level 2,AI and Cybersecurity,2025-AI_CYBER,Sunday,12:00,02:00,Database Systems,Lecture,All,د.ابتسام عادل,مدرج 1
+10,Level 2,AI and Cybersecurity,2025-AI_CYBER,Sunday,03:00,04:00,Information Security,Section,Section 1,م.عماد توفيق,معمل 1
+10,Level 2,AI and Cybersecurity,2025-AI_CYBER,Sunday,04:00,05:00,Logic Design,Section,Section 2,م.نورهان,معمل الالكترونيات
+10,Level 2,AI and Cybersecurity,2025-AI_CYBER,Monday,09:00,11:00,Data structures and algorithms,Lecture,All,د.رشا منتصر,مدرج 2
+10,Level 2,AI and Cybersecurity,2025-AI_CYBER,Monday,11:00,12:00,Data structures and algorithms,Section,Section 1,م.عبدالرحمن خالد,معمل 6
+10,Level 2,AI and Cybersecurity,2025-AI_CYBER,Monday,12:00,02:00,Introduction to Software Engineering,Section,Section 2,م.محمد يعقوب,معمل 5
+10,Level 2,AI and Cybersecurity,2025-AI_CYBER,Monday,01:00,02:00,Logic Design,Section,Section 1,م.مصطفى هندي,معمل الالكترونيات
+10,Level 2,AI and Cybersecurity,2025-AI_CYBER,Monday,02:00,03:00,Database Systems,Section,Section 2,م.محمد نافع,معمل 2
+10,Level 2,AI and Cybersecurity,2025-AI_CYBER,Monday,03:00,05:00,Data structures and algorithms,Section,Section 2,م.عبدالرحمن خالد,معمل 6
+10,Level 2,AI and Cybersecurity,2025-AI_CYBER,Monday,03:00,05:00,Introduction to Software Engineering,Section,Section 1,م/محمود الفقي,معمل 4
+10,Level 2,AI and Cybersecurity,2025-AI_CYBER,Tuesday,09:00,11:00,Statistics & Probabilities,Lecture,All,د/منتدب من كلية علوم,مدرج 1
+10,Level 2,AI and Cybersecurity,2025-AI_CYBER,Tuesday,11:00,01:00,Introduction to Software Engineering,Lecture,All,ا.د/ عمرو ابو هاني,مدرج 1
+10,Level 2,AI and Cybersecurity,2025-AI_CYBER,Tuesday,01:00,03:00,Information Security,Lecture,All,د/ قسم تكنولوجيا المعلومات,مدرج 1

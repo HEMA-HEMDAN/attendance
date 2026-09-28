@@ -1,1 +1,0 @@
-Student workbooks remain at the seedingFiles root because they are supplied source files. The importer reads all XLS/XLSX student workbooks, excludes code 26140186, and preserves source admission-year context in the generated enrollment files.

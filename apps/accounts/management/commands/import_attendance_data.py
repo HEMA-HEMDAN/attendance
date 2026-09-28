@@ -960,7 +960,7 @@ class Command(BaseCommand):
             )
             if user.role != role and not user_created:
                 raise CommandError(f'Staff email has an incompatible role: {staff["email"]}')
-            user.set_password(f'{staff["email"]}@fci')
+            user.set_password(f'{staff["email"]}')
             user.save()
             counts[f'users_{"created" if user_created else "updated"}'] += 1
             if role == Role.DOCTOR:

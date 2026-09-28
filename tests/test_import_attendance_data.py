@@ -7,9 +7,11 @@ from django.core.management.base import CommandError
 
 from apps.organizations.models import Organization
 from apps.accounts.models import Role, User
-from apps.courses.models import AcademicYear
+from apps.courses.models import AcademicYear, Course, CourseOffering, Schedule
 from apps.courses.serializers import AcademicYearSerializer
-from apps.students.models import Student
+from apps.groups.models import Group
+from apps.locations.models import AttendanceLocation
+from apps.students.models import Student, StudentEnrollment
 from apps.accounts.management.commands.import_attendance_data import Command
 
 
@@ -50,7 +52,7 @@ def test_source_extraction_excludes_conflicting_student_and_keeps_year_files():
     source_dir = Path(__file__).resolve().parents[1] / 'seedingFiles'
     rows, inventory = command._read_students(source_dir)
     staff, courses, enrollments = command._read_manifests(source_dir)
-    schedules = command._read_schedule(source_dir / 'scadule.xlsx')
+    schedules = command._read_schedule()
     derived_staff, derived_courses = command._derive_schedule_manifests(schedules)
 
     assert len(inventory) == 12
@@ -58,17 +60,21 @@ def test_source_extraction_excludes_conflicting_student_and_keeps_year_files():
     assert '26140186' not in {row.code for row in rows}
     assert len(rows) == 720
     assert len({row.code for row in rows}) == 719
+    duplicate_26140279 = [row for row in rows if row.code == '26140279']
+    assert len(duplicate_26140279) == 2
+    assert len({row.name for row in duplicate_26140279}) == 1
+    assert next(row for row in Command._unique_student_rows(rows) if row.code == '26140279') == duplicate_26140279[0]
     assert len(staff) > 0
     assert len(courses) > 0
-    assert len(schedules) == 43
-    assert len({(row.course_name, row.group_name) for row in schedules if row.group_name}) == 35
-    assert len(derived_courses) == 26
+    assert len(schedules) == 155
+    assert len({(row.cohort, row.course_name, row.group_name) for row in schedules if row.group_name}) == 8
+    assert len(derived_courses) == 49
     assert all(not row['course_code'] for row in derived_courses)
-    assert len(derived_staff) > 0
+    assert len(derived_staff) == 30
     assert {row['role'] for row in derived_staff} == {'DOCTOR', 'TEACHING_ASSISTANT'}
     assert all(row['course_code'] == '' for row in derived_courses)
-    assert sum(bool(row.cohort) for row in schedules) == 36
-    assert sum(not row.cohort for row in schedules) == 7
+    assert {row.cohort for row in schedules} == set(command.cohort_by_source.values())
+    assert all(not row.day and not row.start_time and not row.end_time for row in schedules)
     assert command._validate_manifests(derived_staff, derived_courses, enrollments, rows, schedules) == []
     assert {row.academic_year for row in enrollments} == {
         '2023-CS', '2023-IS', '2023-IT',
@@ -77,6 +83,28 @@ def test_source_extraction_excludes_conflicting_student_and_keeps_year_files():
         '2026-AI', '2026-CYBERSECURITY', '2026-GENERAL',
     }
     assert command._missing_manifests(source_dir) == {}
+
+
+def test_embedded_schedule_preserves_canonical_courses_programs_and_sections():
+    command = Command()
+    schedules = command._read_schedule()
+    staff, _ = command._derive_schedule_manifests(schedules)
+    staff_names = {row['full_name'] for row in staff}
+
+    assert 'Study Room' not in staff_names
+    assert 'Room 1' not in staff_names
+    assert 'Ahmed Samir' in staff_names
+    assert 'Dr Ahmed Samir' not in staff_names
+    assert command._canonical_course_name('Information retrival') == 'Information Retrieval'
+    assert command._canonical_course_name('Probability and Statisctics') == 'Probability and Statistics'
+    assert command._canonical_course_name('Databases') != command._canonical_course_name('Database Systems')
+    assert command._canonical_course_name('Software Engineering') != command._canonical_course_name('Introduction to Software Engineering')
+    ai_cyber = [row for row in schedules if row.page == 9]
+    assert {row.cohort for row in ai_cyber} == {'2026-AI', '2026-CYBERSECURITY'}
+    section = next(row for row in schedules if row.course_name == 'Introduction To Computer Science' and row.group_name == 'Section 1')
+    assert section.cohort == '2026-GENERAL'
+    assert section.staff_name == 'Abdallah El-Araby'
+    assert not section.day and not section.start_time and not section.end_time
 
 
 def test_academic_year_preview_covers_all_approved_cohorts():
@@ -92,6 +120,13 @@ def test_locations_are_not_a_required_manifest():
     source_dir = Path(__file__).resolve().parents[1] / 'seedingFiles'
 
     assert 'locations.csv' not in command._missing_manifests(source_dir)
+
+
+def test_embedded_schedule_does_not_invent_weekly_schedule_times():
+    schedules = Command()._read_schedule()
+
+    assert schedules
+    assert not [row for row in schedules if row.day or row.start_time or row.end_time]
 
 
 @pytest.mark.django_db
@@ -121,6 +156,25 @@ def test_no_new_program_business_model_exists():
     assert not model_names.intersection({'AcademicProgram', 'Department', 'Major', 'Track', 'Program', 'Specialization'})
 
 
+@pytest.mark.django_db
+def test_missing_fci_organization_is_auto_created_for_empty_database_import():
+    source_dir = Path(__file__).resolve().parents[1] / 'seedingFiles'
+    Organization.objects.filter(slug='fci').delete()
+
+    call_command(
+        'import_attendance_data',
+        '--source-dir', str(source_dir),
+        '--organization', 'fci',
+        '--execute',
+    )
+
+    organization = Organization.objects.get(slug='fci')
+    assert organization.name == 'FCI'
+    assert organization.slug == 'fci'
+    assert Student.objects.filter(organization=organization).count() == 719
+    assert User.objects.filter(organization=organization).count() > 0
+
+
 def test_reset_requires_explicit_confirmation():
     with pytest.raises(CommandError, match='confirm-reset'):
         call_command(
@@ -130,6 +184,80 @@ def test_reset_requires_explicit_confirmation():
             '--execute',
             '--reset',
         )
+
+
+def test_student_password_suffix_is_stable_and_override_is_supported():
+    first_default = Command()._student_password_suffix()
+    second_default = Command()._student_password_suffix()
+
+    assert first_default == second_default
+    assert first_default
+    assert Command()._student_password_suffix('explicit-suffix') == 'explicit-suffix'
+
+
+def test_student_rows_keep_section_metadata_for_enrollment_mapping():
+    rows, _ = Command()._read_students(Path(__file__).resolve().parents[1] / 'seedingFiles')
+
+    first_general = next(row for row in rows if row.code == '26140147')
+    first_cs = next(row for row in rows if row.code == '24140006')
+
+    assert first_general.section == 'Section 1'
+    assert first_cs.section == 'Section 1'
+
+
+@pytest.mark.django_db
+def test_fresh_database_import_creates_required_enrollments_and_is_idempotent():
+    source_dir = Path(__file__).resolve().parents[1] / 'seedingFiles'
+    organization = Organization.objects.create(
+        name='Fresh Import University',
+        slug='fresh-import-university',
+        timezone='Africa/Cairo',
+    )
+
+    call_command(
+        'import_attendance_data',
+        '--source-dir', str(source_dir),
+        '--organization', organization.slug,
+        '--execute',
+    )
+
+    assert Organization.objects.filter(pk=organization.pk).exists()
+    assert User.objects.filter(organization=organization).count() > 0
+    assert Student.objects.filter(organization=organization).count() == 719
+    assert Student.objects.filter(organization=organization, student_id='26140279').count() == 1
+    assert Student.objects.filter(organization=organization, student_id='26140186').count() == 0
+    assert StudentEnrollment.objects.filter(student__organization=organization).count() > 0
+    assert Group.objects.filter(course_offering__course__organization=organization).count() > 0
+    assert AttendanceLocation.objects.filter(organization=organization).count() == 0
+
+    before = {
+        'students': Student.objects.filter(organization=organization).count(),
+        'users': User.objects.filter(organization=organization).count(),
+        'courses': 0,
+        'course_offerings': 0,
+        'groups': 0,
+        'student_enrollments': StudentEnrollment.objects.filter(student__organization=organization).count(),
+        'schedules': 0,
+    }
+    before['courses'] = Course.objects.filter(organization=organization).count()
+    before['course_offerings'] = CourseOffering.objects.filter(course__organization=organization).count()
+    before['groups'] = Group.objects.filter(course_offering__course__organization=organization).count()
+    before['schedules'] = Schedule.objects.filter(course_offering__course__organization=organization).count()
+
+    call_command(
+        'import_attendance_data',
+        '--source-dir', str(source_dir),
+        '--organization', organization.slug,
+        '--execute',
+    )
+
+    assert Student.objects.filter(organization=organization).count() == before['students']
+    assert User.objects.filter(organization=organization).count() == before['users']
+    assert Course.objects.filter(organization=organization).count() == before['courses']
+    assert CourseOffering.objects.filter(course__organization=organization).count() == before['course_offerings']
+    assert Group.objects.filter(course_offering__course__organization=organization).count() == before['groups']
+    assert StudentEnrollment.objects.filter(student__organization=organization).count() == before['student_enrollments']
+    assert Schedule.objects.filter(course_offering__course__organization=organization).count() == before['schedules']
 
 
 @pytest.mark.django_db

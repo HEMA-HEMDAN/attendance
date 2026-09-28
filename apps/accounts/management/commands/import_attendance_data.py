@@ -9,9 +9,10 @@ import tempfile
 import unicodedata
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
+from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
@@ -23,6 +24,14 @@ from apps.groups.models import Group
 from apps.locations.models import AttendanceLocation
 from apps.staff.models import Doctor, TeachingAssistant
 from apps.students.models import Student, StudentEnrollment
+from apps.accounts.management.commands.pasted_schedule import (
+    DOCTOR_ALIASES,
+    ROOM_LABELS,
+    STAFF_ALIASES,
+    TEMPORARY_DOCTORS,
+    TEMPORARY_DOCTOR_NAMES,
+    read_pasted_schedule_entries,
+)
 
 
 @dataclass(frozen=True)
@@ -37,6 +46,7 @@ class StudentRow:
     cohort: str
     source: str
     row_number: int
+    section: str = ''
 
 
 @dataclass(frozen=True)
@@ -62,6 +72,8 @@ class ScheduleRow:
     end_time: str
     room: str
     source: str
+    page: int = 0
+    program: str = ''
 
 
 class Command(BaseCommand):
@@ -106,9 +118,10 @@ class Command(BaseCommand):
         organization = self._organization(options['organization'])
         rows, inventory = self._read_students(source_dir)
         _, _, enrollments = self._read_manifests(source_dir)
-        schedules = self._read_schedule(source_dir / 'scadule.xlsx')
+        schedules = self._read_schedule()
         staff, courses = self._derive_schedule_manifests(schedules)
         blockers = self._validate_students(rows, organization)
+        blockers.extend(self._validate_existing_staff(staff))
         blockers.extend(self._validate_manifests(staff, courses, enrollments, rows, schedules))
         missing = self._missing_manifests(source_dir)
 
@@ -118,20 +131,15 @@ class Command(BaseCommand):
         if blockers:
             self.stdout.write(self.style.SUCCESS('Dry-run complete; no database writes performed.'))
             raise CommandError('Validation failed; no database changes were made.')
-        if missing and not options['students_only']:
-            raise CommandError('Full import is blocked because source manifests are missing.')
         if not options['execute']:
             self.stdout.write(self.style.SUCCESS('Dry-run complete; no database writes performed.'))
             return
-        if not options['students_only']:
-            raise CommandError('Full import is not enabled until course/group relationships are complete.')
-        if not options['student_password_suffix']:
-            raise CommandError('A password suffix is required for a real student import.')
+        password_suffix = self._student_password_suffix(options['student_password_suffix'])
 
         with transaction.atomic():
             if options['reset']:
                 self._print_deleted(self._reset_application_data())
-            counts = self._import_students(rows, organization, options['student_password_suffix'])
+            counts = self._import_all(rows, schedules, enrollments, organization, password_suffix)
         self._print_counts(counts)
         self.stdout.write(self.style.SUCCESS('Import committed successfully.'))
 
@@ -143,8 +151,28 @@ class Command(BaseCommand):
         if options['reset'] and options['confirm_reset'] != 'RESET-OLD-APPLICATION-DATA':
             raise CommandError('--reset requires --confirm-reset RESET-OLD-APPLICATION-DATA.')
 
+    def _student_password_suffix(self, override=None):
+        if override:
+            return override
+        configured_suffix = getattr(settings, 'ATTENDANCE_IMPORT_STUDENT_PASSWORD_SUFFIX', None)
+        if configured_suffix:
+            return configured_suffix
+        return hashlib.sha256(settings.SECRET_KEY.encode('utf-8')).hexdigest()[:24]
+
     def _organization(self, slug):
         from apps.organizations.models import Organization
+
+        if slug == 'fci':
+            organization, created = Organization.objects.get_or_create(
+                slug=slug,
+                defaults={
+                    'name': 'FCI',
+                    'timezone': 'Africa/Cairo',
+                },
+            )
+            if created:
+                self.stdout.write(self.style.SUCCESS(f'Created supported organization for import: {organization.slug}'))
+            return organization
 
         try:
             return Organization.objects.get(slug=slug)
@@ -160,6 +188,7 @@ class Command(BaseCommand):
         if not files:
             raise CommandError(f'No student workbooks found in {source_dir}')
         rows, inventory = [], []
+        self.excluded_source_records = defaultdict(list)
         for path in files:
             workbook_path = path
             temporary_dir = None
@@ -196,16 +225,29 @@ class Command(BaseCommand):
             if header_index is None:
                 continue
             headers = [self._clean(value) for value in values[header_index]]
+            current_section = ''
+            for row in values[:header_index + 1]:
+                section_name = self._extract_section(row)
+                if section_name:
+                    current_section = section_name
             for row_number, values_row in enumerate(values[header_index + 1:], start=header_index + 2):
                 record = dict(zip(headers, (self._clean(value) for value in values_row)))
+                section_name = self._extract_section(values_row)
+                if section_name:
+                    current_section = section_name
+                    continue
                 code, name = record.get('الكود', ''), record.get('الاسم باللغة العربية', '')
-                if not re.fullmatch(r'\d{6,}', code) or not name or code in self.excluded_student_codes:
+                if not re.fullmatch(r'\d{6,}', code) or not name:
+                    continue
+                if code in self.excluded_student_codes:
+                    self.excluded_source_records[code].append((name, f'{source_name} / {sheet.title}', row_number))
                     continue
                 first_name, last_name = self._split_name(name)
                 rows.append(StudentRow(
                     code, name, first_name, last_name, self._department(source_name),
                     record.get('المستوى', '') or self._level(source_name), record.get('عام الالتحاق', ''),
                     self._cohort_for_source(source_name), f'{source_name} / {sheet.title}', row_number,
+                    current_section,
                 ))
         workbook.close()
         return rows, sheet_info
@@ -217,6 +259,8 @@ class Command(BaseCommand):
         enrollments = []
         for path in sorted(enrollment_dir.glob('*.csv')) if enrollment_dir.is_dir() else []:
             for row in self._read_csv(path):
+                if row.get('student_code') in self.excluded_student_codes:
+                    continue
                 enrollments.append(EnrollmentRow(
                     self._cohort_for_source(row.get('source_file', '')) or row.get('academic_year', path.stem),
                     row.get('student_code', ''),
@@ -225,25 +269,31 @@ class Command(BaseCommand):
                 ))
         return staff, courses, enrollments
 
-    def _read_schedule(self, path):
-        if not path.is_file():
-            raise CommandError(f'Schedule source does not exist: {path}')
-        try:
-            from openpyxl import load_workbook
-        except ImportError as exc:
-            raise CommandError('openpyxl is required to read the schedule source.') from exc
-        workbook = load_workbook(path, read_only=True, data_only=True)
-        sheet = workbook['Changes since v8']
+    def _read_schedule(self):
         schedules = []
-        for row_number, row in enumerate(sheet.iter_rows(values_only=True), start=1):
-            values = [self._clean(value) for value in row]
-            if 6 <= row_number <= 12:
-                level, course, group, current = values[0], values[1], '', values[4]
-                schedules.append(self._parse_schedule_value(level, course, group, current, row_number, 'lecture'))
-            elif 16 <= row_number <= 52 and values[0] and values[1] and values[2] and values[5].lower() != 'none':
-                schedules.append(self._parse_schedule_value(values[0], values[1], values[2], values[5], row_number, 'lab'))
-        workbook.close()
-        return [schedule for schedule in schedules if schedule is not None]
+        for entry in read_pasted_schedule_entries():
+            if entry.role == 'DOCTOR':
+                staff_name = DOCTOR_ALIASES.get(entry.staff_name, entry.staff_name)
+                staff_name = TEMPORARY_DOCTORS.get(staff_name, staff_name)
+                staff_name = re.sub(r'^Dr\.?\s*', '', staff_name, flags=re.IGNORECASE)
+            else:
+                staff_name = STAFF_ALIASES.get(entry.staff_name, entry.staff_name)
+            schedules.append(ScheduleRow(
+                entry.cohort,
+                entry.level,
+                self._normalize_course_name(entry.course_name),
+                entry.group_name,
+                staff_name,
+                entry.role,
+                '',
+                '',
+                '',
+                '',
+                entry.source,
+                entry.page,
+                entry.program,
+            ))
+        return schedules
 
     @staticmethod
     def _derive_schedule_manifests(schedules):
@@ -251,30 +301,62 @@ class Command(BaseCommand):
         courses_by_name = {}
         for row in schedules:
             if row.staff_name:
-                key = ' '.join(row.staff_name.casefold().split())
+                key = (' '.join(row.staff_name.casefold().split()), row.role)
                 staff_by_key.setdefault(key, {
                     'full_name': row.staff_name,
                     'first_name': row.staff_name.split()[0] if len(row.staff_name.split()) > 1 else row.staff_name,
                     'last_name': ' '.join(row.staff_name.split()[1:]),
                     'role': row.role,
-                    'email': '',
+                    'email': Command._staff_email(row.staff_name, row.role),
+                    'is_temporary': row.staff_name in TEMPORARY_DOCTOR_NAMES,
                     'source': row.source,
                 })
-            courses_by_name.setdefault(row.course_name.casefold(), {
-                'course_name': row.course_name,
+            canonical_name = Command._canonical_course_name(row.course_name)
+            courses_by_name.setdefault(canonical_name.casefold(), {
+                'course_name': canonical_name,
                 'course_code': '',
                 'source': row.source,
             })
-        for staff in staff_by_key.values():
-            if staff['last_name']:
-                staff['email'] = f'{staff["first_name"].lower()}.{staff["last_name"].lower()}@fci.edu'
         return list(staff_by_key.values()), list(courses_by_name.values())
+
+    @staticmethod
+    def _staff_email(full_name, role):
+        name = unicodedata.normalize('NFKD', full_name).encode('ascii', 'ignore').decode('ascii').lower()
+        parts = re.findall(r'[a-z0-9]+', name)
+        if not parts:
+            return ''
+        email_name = parts[0] if len(parts) == 1 else f'{parts[0]}.{parts[-1]}'
+        return f'{email_name}@fci.edu'
+
+    @classmethod
+    def _canonical_course_name(cls, name):
+        normalized = cls._normalize_course_name(name)
+        aliases = {
+            'information retrival': 'Information Retrieval',
+            'information retrieval': 'Information Retrieval',
+            'probability and statisctics': 'Probability and Statistics',
+            'probability and statistics': 'Probability and Statistics',
+            'geographic information system': 'Geographic Information System',
+            'data mining': 'Data Mining',
+            'speech processing': 'Speech Processing',
+            'wireless and mobile computing': 'Wireless and Mobile Computing',
+            'programming language design': 'Programming Language Design',
+            'digital circuits': 'Digital Circuits',
+            'data structures and algorithms': 'Data Structures and Algorithms',
+            'communication & negotiation skills': 'Communication and Negotiation Skills',
+            'communication and negotiation skills': 'Communication and Negotiation Skills',
+        }
+        return aliases.get(normalized.casefold(), normalized)
 
     def _parse_schedule_value(self, level, course, group, value, row_number, session_type):
         parts = [part.strip() for part in value.split('|')]
         if len(parts) != 3:
             return ScheduleRow(self._cohort_for_level(level), level, course.rstrip(' /'), group, '', '', '', '', '', '', f'scadule.xlsx / Changes since v8 row {row_number}')
-        day_time, staff_name, room = parts
+        day_time, second_value, third_value = parts
+        if session_type == 'lecture':
+            room, staff_name = second_value, third_value
+        else:
+            staff_name, room = second_value, third_value
         match = re.fullmatch(r'([A-Za-z]+)\s+(\d{1,2}:\d{2})-(\d{1,2}:\d{2})', day_time)
         if not match:
             return ScheduleRow(self._cohort_for_level(level), level, course.rstrip(' /'), group, staff_name, '', '', '', '', room, f'scadule.xlsx / Changes since v8 row {row_number}')
@@ -321,7 +403,7 @@ class Command(BaseCommand):
         canonical_usage = defaultdict(set)
         canonical_groups = defaultdict(set)
         for row in schedules:
-            course_name = self._normalize_course_name(row.course_name)
+            course_name = self._canonical_course_name(row.course_name)
             if not course_name:
                 continue
             canonical_usage[course_name].add(row.cohort)
@@ -387,6 +469,17 @@ class Command(BaseCommand):
         parts = name.split()
         return (parts[0], ' '.join(parts[1:])) if len(parts) > 1 else (name, name)
 
+    @staticmethod
+    def _extract_section(values_row):
+        for value in values_row:
+            text = Command._clean(value)
+            if not text:
+                continue
+            match = re.fullmatch(r'Section\s+\d+[A-Za-z\-]*', text, flags=re.IGNORECASE)
+            if match:
+                return text
+        return ''
+
     def _department(self, filename):
         normalized = unicodedata.normalize('NFKC', filename).lower()
         for key, value in self.program_labels.items():
@@ -421,7 +514,12 @@ class Command(BaseCommand):
             if len({self._name_key(row.name) for row in matches}) > 1:
                 blockers.append(f'Conflicting student code {code}: {", ".join(row.source for row in matches)}')
             elif len(matches) > 1:
-                self.stdout.write(self.style.WARNING(f'Duplicate identical student {code} collapsed from {len(matches)} source rows.'))
+                affiliations = sorted({(row.cohort, row.department) for row in matches})
+                selected_source = matches[0].source
+                self.stdout.write(self.style.WARNING(
+                    f'Duplicate identical student {code} collapsed from {len(matches)} source rows; '
+                    f'affiliations={affiliations}; single Student profile retains first source row {selected_source}.'
+                ))
         existing_ids = set(Student.objects.filter(organization=organization).values_list('student_id', flat=True))
         for row in rows:
             if row.code in existing_ids:
@@ -431,11 +529,15 @@ class Command(BaseCommand):
                 blockers.append(f'Generated email belongs to non-student user {row.code}@fci.edu.')
         return blockers
 
+    @staticmethod
+    def _unique_student_rows(rows):
+        unique_rows = {}
+        for row in rows:
+            unique_rows.setdefault(row.code, row)
+        return tuple(unique_rows.values())
+
     def _validate_manifests(self, staff, courses, enrollments, rows, schedules):
         blockers = []
-        incomplete_staff = [row.get('full_name', '') for row in staff if not row.get('first_name') or not row.get('last_name')]
-        if incomplete_staff:
-            self.stdout.write(self.style.WARNING(f'Incomplete staff names from source: {", ".join(incomplete_staff)}'))
         invalid_roles = sorted({row.get('role', '') for row in staff if row.get('role') not in {'DOCTOR', 'TEACHING_ASSISTANT'}})
         if invalid_roles:
             self.stdout.write(self.style.WARNING(f'Invalid or missing staff roles: {", ".join(invalid_roles)}'))
@@ -454,11 +556,66 @@ class Command(BaseCommand):
         unknown_students = sorted({row.student_code for row in enrollments if row.student_code and row.student_code not in student_codes})
         if unknown_students:
             blockers.append(f'Enrollment files reference unknown students: {", ".join(unknown_students)}')
-        missing_relationships = sum(not row.course_code or not row.group_name for row in enrollments)
-        if missing_relationships:
-            self.stdout.write(self.style.WARNING(f'{missing_relationships} student cohort rows have no source subject/lab membership; they are not treated as enrollments.'))
+        proven_memberships = [row for row in enrollments if row.student_code and (row.course_code or row.course_name)]
+        self.stdout.write(
+            f'Student-course membership source rows: proven={len(proven_memberships)}; '
+            f'cohort-only={len(enrollments) - len(proven_memberships)}.'
+        )
+        if any(row.course_code or row.course_name for row in proven_memberships):
+            known_courses = {
+                self._canonical_course_name(row.course_name).casefold()
+                for row in schedules if self._normalize_course_name(row.course_name)
+            }
+            known_codes = {
+                self._deterministic_course_code('tech-uni', row.course_name)
+                for row in schedules if self._normalize_course_name(row.course_name)
+            }
+            invalid_memberships = [row for row in proven_memberships if (
+                row.course_name and self._normalize_course_name(row.course_name).casefold() not in known_courses
+            ) or (
+                row.course_code and row.course_code not in known_codes
+            )]
+            if invalid_memberships:
+                blockers.append(f'Enrollment manifest references unknown courses: {len(invalid_memberships)} row(s)')
         if not schedules:
-            blockers.append('No current schedule relationships could be extracted from scadule.xlsx.')
+            blockers.append('No timetable relationships are configured from the supplied transcription.')
+        partial_timing = [row.source for row in schedules if any((row.day, row.start_time, row.end_time)) and not all((row.day, row.start_time, row.end_time))]
+        if partial_timing:
+            blockers.append(f'Incomplete day/time on timetable entries: {", ".join(partial_timing)}')
+        unnamed_groups = [row.source for row in schedules if row.group_name and not row.staff_name]
+        if unnamed_groups:
+            blockers.append(f'Offering-scoped sections lack a TA identity: {", ".join(unnamed_groups)}')
+        group_staff = defaultdict(set)
+        offering_doctors = defaultdict(set)
+        for row in schedules:
+            if not row.cohort:
+                continue
+            course_key = self._canonical_course_name(row.course_name).casefold()
+            if row.group_name and row.role == 'TEACHING_ASSISTANT':
+                group_staff[(row.cohort, course_key, row.group_name)].add(row.staff_name.casefold())
+            if row.role == 'DOCTOR':
+                offering_doctors[(row.cohort, course_key)].add(row.staff_name.casefold())
+        conflicting_groups = [key for key, names in group_staff.items() if len(names) > 1]
+        conflicting_offerings = [key for key, names in offering_doctors.items() if len(names) > 1]
+        if conflicting_groups:
+            self.stdout.write(self.style.WARNING(
+                f'Groups with multiple source teaching assistants will be imported without a TA link: {conflicting_groups}'
+            ))
+        if conflicting_offerings:
+            self.stdout.write(self.style.WARNING(
+                'Multiple doctors appear for one offering; the first in source order will be assigned because CourseOffering has one Doctor field: '
+                f'{conflicting_offerings}'
+            ))
+        return blockers
+
+    @staticmethod
+    def _validate_existing_staff(staff):
+        blockers = []
+        for staff_row in staff:
+            existing_user = User.objects.filter(email=staff_row.get('email', '')).first()
+            expected_role = Role.DOCTOR if staff_row.get('role') == 'DOCTOR' else Role.TEACHING_ASSISTANT
+            if existing_user and existing_user.role != expected_role:
+                blockers.append(f'Staff email belongs to incompatible user role: {staff_row["email"]}')
         return blockers
 
     def _missing_manifests(self, source_dir):
@@ -484,6 +641,11 @@ class Command(BaseCommand):
             if row.student_code:
                 students_by_year[row.academic_year].add(row.student_code)
         course_usage = self._course_usage_summary(schedules)
+        cohort_sections = {(row.cohort, row.group_name) for row in schedules if row.group_name}
+        derived_enrollments = sum(
+            1 for row in self._unique_student_rows(rows)
+            if row.section and (row.cohort, row.section) in cohort_sections
+        )
         self.stdout.write(f'Organization: {organization.slug}')
         self.stdout.write(f'Mode: {"EXECUTE" if options["execute"] else "DRY RUN"}')
         self.stdout.write(f'Source files discovered: {len(self.cohort_by_source)}')
@@ -494,12 +656,26 @@ class Command(BaseCommand):
         self.stdout.write(f'Students: source={len(rows)} unique_codes={len({row.code for row in rows})}')
         self.stdout.write('Excluded students:')
         for code in sorted(self.excluded_student_codes):
-            self.stdout.write(f'  {code}')
+            records = getattr(self, 'excluded_source_records', {}).get(code, [])
+            identities = sorted({name for name, _, _ in records})
+            sources = sorted({f'{source} row {row_number}' for _, source, row_number in records})
+            suffix = f' conflicting names={identities}; sources={sources}' if len(identities) > 1 else ''
+            self.stdout.write(f'  {code} (excluded by approved rule){suffix}')
         self.stdout.write(f'Staff extracted: {len(staff)}; courses extracted: {len(courses)}')
-        self.stdout.write(f'Schedule relationships derived: {len(schedules)}')
+        self.stdout.write(f'  temporary doctor placeholders: {sum(bool(row.get("is_temporary")) for row in staff)}')
+        self.stdout.write(f'Embedded timetable relationships: {len(schedules)}')
         self.stdout.write(f'  cohort-resolved: {sum(bool(row.cohort) for row in schedules)}')
         self.stdout.write(f'  unresolved cohort: {sum(not row.cohort for row in schedules)}')
-        self.stdout.write(f'  labs/groups: {len({(row.course_name, row.group_name) for row in schedules if row.group_name})}')
+        self.stdout.write('  source timetable pages/programs:')
+        page_entries = defaultdict(set)
+        for row in schedules:
+            page_entries[(row.page, row.program)].add((row.cohort, self._canonical_course_name(row.course_name)))
+        for (page, program), entries in sorted(page_entries.items()):
+            self.stdout.write(f'    page {page}: {program}; cohorts={len({cohort for cohort, _ in entries})}; courses={len({course for _, course in entries})}')
+        self.stdout.write(f'  offering-scoped Groups with explicit section+TA mappings: {len({(row.cohort, self._canonical_course_name(row.course_name), row.group_name) for row in schedules if row.group_name})}')
+        self.stdout.write(f'  day/time unresolved; Schedule rows deferred: {sum(not all((row.day, row.start_time, row.end_time)) for row in schedules)}')
+        self.stdout.write(f'  room labels retained as source metadata: {", ".join(ROOM_LABELS)}')
+        self.stdout.write('  AttendanceLocations seeded from room labels: 0')
         self.stdout.write(f'  unique canonical courses: {course_usage["unique_courses"]}')
         self.stdout.write(f'  course appearances across cohorts: {course_usage["appearances_across_cohorts"]}')
         self.stdout.write(f'  courses reused across multiple academic years: {course_usage["reused_across_years"]}')
@@ -508,12 +684,16 @@ class Command(BaseCommand):
             if len(cohorts) > 1:
                 groups = ', '.join(sorted(course_usage['course_groups'].get(course_name, []))) if course_name in course_usage['course_groups'] else 'none'
                 self.stdout.write(f'  {course_name} -> cohorts={cohorts} groups={groups}')
-        self.stdout.write(f'  course codes found: 0; course codes missing: {len(courses)}')
-        self.stdout.write(
-            f'  subject/lab enrollments mapped from student files: 0; '
-            f'unresolved: {len(rows)} '
-            '(student files contain cohort membership but no subject/lab membership columns)'
-        )
+        canonical_codes = {
+            self._deterministic_course_code(organization.slug, course_name)
+            for course_name in course_usage['course_cohorts']
+        }
+        self.stdout.write(f'  deterministic canonical course codes: {len(canonical_codes)}')
+        proven_memberships = [row for row in enrollments if row.student_code and (row.course_code or row.course_name)]
+        self.stdout.write(f'Student cohort records: {len(rows)}')
+        self.stdout.write(f'Proven StudentEnrollment records: {len(proven_memberships)}')
+        self.stdout.write(f'Derived StudentEnrollment preview from cohort sections: {derived_enrollments}')
+        self.stdout.write(f'Student-course enrollments unavailable from source: {len(rows) - len(proven_memberships)}')
         self.stdout.write(f'AcademicYear records previewed: {len(self._academic_year_specs())}')
         for spec in self._academic_year_specs():
             self.stdout.write(f'  {spec["name"]}: {spec["start_date"]} to {spec["end_date"]}, active={spec["is_active"]}')
@@ -536,7 +716,7 @@ class Command(BaseCommand):
             AttendanceRecord.objects, DeviceChallenge.objects, AttendanceSession.objects,
             SessionOccurrence.objects, ScheduleException.objects, Schedule.objects,
             StudentEnrollment.objects, Group.objects, CourseOffering.objects, Course.objects,
-            Semester.objects, AcademicYear.objects, Device.objects, AttendanceLocation.objects,
+            Semester.objects, AcademicYear.objects, Device.objects,
             Student.objects, Doctor.objects, TeachingAssistant.objects,
         ):
             queryset.all().delete()
@@ -559,22 +739,232 @@ class Command(BaseCommand):
         counts['preserved_admin_users'] = User.objects.filter(role__in=[Role.ADMIN, Role.SUPERADMIN]).count()
         return counts
 
-    def _import_students(self, rows, organization, password_suffix):
+    def _import_all(self, rows, schedules, enrollments, organization, password_suffix):
         counts = Counter()
-        unique_rows = {row.code: row for row in rows}
-        for row in unique_rows.values():
+        academic_years, semesters = {}, {}
+        for spec in self._academic_year_specs():
+            academic_year, created = AcademicYear.objects.update_or_create(
+                organization=organization,
+                name=spec['name'],
+                defaults={
+                    'start_date': spec['start_date'],
+                    'end_date': spec['end_date'],
+                    'is_active': spec['is_active'],
+                },
+            )
+            academic_years[spec['name']] = academic_year
+            counts[f'academic_years_{"created" if created else "updated"}'] += 1
+            semester, created = Semester.objects.update_or_create(
+                academic_year=academic_year,
+                name='Full Year',
+                defaults={
+                    'organization': organization,
+                    'start_date': academic_year.start_date,
+                    'end_date': academic_year.end_date,
+                    'is_active': academic_year.is_active,
+                },
+            )
+            semesters[spec['name']] = semester
+            counts[f'semesters_{"created" if created else "updated"}'] += 1
+
+        staff_rows, _ = self._derive_schedule_manifests(schedules)
+        staff_profiles = {}
+        for staff in staff_rows:
+            role = Role.DOCTOR if staff['role'] == 'DOCTOR' else Role.TEACHING_ASSISTANT
+            user, user_created = User.objects.get_or_create(
+                email=staff['email'],
+                defaults={
+                    'first_name': staff['first_name'],
+                    'last_name': staff['last_name'],
+                    'role': role,
+                    'organization': organization,
+                },
+            )
+            if user_created:
+                user.set_password(f'{staff["email"]}{password_suffix}')
+                user.save()
+            elif user.role != role:
+                raise CommandError(f'Staff email has an incompatible role: {staff["email"]}')
+            counts[f'users_{"created" if user_created else "updated"}'] += 1
+            if role == Role.DOCTOR:
+                profile, created = Doctor.objects.update_or_create(
+                    user=user,
+                    defaults={
+                        'organization': organization,
+                        'department': '',
+                        'title': 'Dr.' if staff['is_temporary'] else '',
+                    },
+                )
+                entity = 'doctors'
+            else:
+                profile, created = TeachingAssistant.objects.update_or_create(
+                    user=user,
+                    defaults={'organization': organization, 'department': ''},
+                )
+                entity = 'teaching_assistants'
+            staff_profiles[(staff['full_name'].casefold(), staff['role'])] = profile
+            counts[f'{entity}_{"created" if created else "updated"}'] += 1
+
+        courses_by_key = {}
+        course_names = {
+            self._canonical_course_name(row.course_name).casefold(): self._canonical_course_name(row.course_name)
+            for row in schedules if self._normalize_course_name(row.course_name)
+        }
+        for course_key, course_name in course_names.items():
+            code = self._deterministic_course_code(organization.slug, course_name)
+            course, created = Course.objects.update_or_create(
+                organization=organization,
+                code=code,
+                defaults={'name': course_name, 'department': ''},
+            )
+            courses_by_key[course_key] = course
+            counts[f'courses_{"created" if created else "updated"}'] += 1
+
+        offering_doctors = {}
+        for row in schedules:
+            if row.cohort and row.role == 'DOCTOR':
+                key = (row.cohort, self._canonical_course_name(row.course_name).casefold())
+                offering_doctors.setdefault(key, staff_profiles[(row.staff_name.casefold(), row.role)])
+
+        offerings, groups = {}, {}
+        group_assistants = defaultdict(set)
+        for row in schedules:
+            if row.cohort and row.group_name and row.role == 'TEACHING_ASSISTANT':
+                group_key = (
+                    row.cohort,
+                    self._canonical_course_name(row.course_name).casefold(),
+                    row.group_name,
+                )
+                group_assistants[group_key].add(staff_profiles[(row.staff_name.casefold(), row.role)])
+
+        for row in schedules:
+            if not row.cohort or row.cohort not in academic_years:
+                counts['schedules_skipped_unresolved_cohort'] += 1
+                continue
+            course_key = self._canonical_course_name(row.course_name).casefold()
+            course = courses_by_key[course_key]
+            year = academic_years[row.cohort]
+            offering_key = (course.pk, year.pk)
+            if offering_key not in offerings:
+                offering, created = CourseOffering.objects.update_or_create(
+                    course=course,
+                    academic_year=year,
+                    semester=semesters[row.cohort],
+                    defaults={
+                        'doctor': offering_doctors.get((row.cohort, course_key)),
+                        'status': 'ACTIVE',
+                    },
+                )
+                offerings[offering_key] = offering
+                counts[f'course_offerings_{"created" if created else "updated"}'] += 1
+            offering = offerings[offering_key]
+
+            group = None
+            if row.group_name:
+                group_key = (offering.pk, row.group_name)
+                if group_key not in groups:
+                    source_group_key = (row.cohort, course_key, row.group_name)
+                    candidates = group_assistants[source_group_key]
+                    assistant = next(iter(candidates)) if len(candidates) == 1 else None
+                    group, created = Group.objects.update_or_create(
+                        course_offering=offering,
+                        name=row.group_name,
+                        defaults={'teaching_assistant': assistant, 'status': 'ACTIVE'},
+                    )
+                    groups[group_key] = group
+                    counts[f'groups_{"created" if created else "updated"}'] += 1
+                group = groups[group_key]
+
+            if not all((row.day, row.start_time, row.end_time)):
+                counts['schedules_skipped_unresolved_timing'] += 1
+                continue
+
+            _, created = Schedule.objects.update_or_create(
+                course_offering=offering,
+                group=group,
+                session_type='LAB' if group else 'LECTURE',
+                day_of_week=datetime.strptime(row.day, '%A').weekday(),
+                start_time=datetime.strptime(row.start_time, '%H:%M').time(),
+                end_time=datetime.strptime(row.end_time, '%H:%M').time(),
+                defaults={
+                    'effective_from': year.start_date,
+                    'effective_until': year.end_date,
+                    'is_active': True,
+                    'location': None,
+                },
+            )
+            counts[f'schedules_{"created" if created else "updated"}'] += 1
+
+        for row in self._unique_student_rows(rows):
             user, created_user = User.objects.get_or_create(email=f'{row.code}@fci.edu', defaults={
                 'first_name': row.first_name, 'last_name': row.last_name, 'role': Role.STUDENT, 'organization': organization,
             })
             if not created_user:
                 user.first_name, user.last_name, user.role, user.organization = row.first_name, row.last_name, Role.STUDENT, organization
-            user.set_password(f'{row.code}{password_suffix}')
+            else:
+                user.set_password(f'{row.code}{password_suffix}')
             user.save()
             _, created_student = Student.objects.update_or_create(
                 organization=organization, student_id=row.code,
                 defaults={'user': user, 'department': row.department, 'academic_level': row.level},
             )
-            counts['created' if created_student else 'updated'] += 1
+            counts[f'students_{"created" if created_student else "updated"}'] += 1
+            counts[f'users_{"created" if created_user else "updated"}'] += 1
+
+        student_by_code = {student.student_id: student for student in Student.objects.filter(organization=organization)}
+        course_by_code = {course.code: course for course in Course.objects.filter(organization=organization)}
+        proven_enrollment_count = 0
+        for enrollment_row in enrollments:
+            if enrollment_row.student_code not in student_by_code:
+                continue
+            course = course_by_code.get(enrollment_row.course_code) if enrollment_row.course_code else None
+            if course is None and enrollment_row.course_name:
+                course = courses_by_key.get(self._canonical_course_name(enrollment_row.course_name).casefold())
+            year = academic_years.get(enrollment_row.academic_year)
+            if course is None or year is None:
+                continue
+            offering = CourseOffering.objects.filter(course=course, academic_year=year).first()
+            if offering is None:
+                continue
+            group = None
+            if enrollment_row.group_name:
+                group = Group.objects.filter(course_offering=offering, name=enrollment_row.group_name).first()
+                if group is None:
+                    continue
+            _, created = StudentEnrollment.objects.update_or_create(
+                student=student_by_code[enrollment_row.student_code],
+                course_offering=offering,
+                defaults={'group': group},
+            )
+            proven_enrollment_count += 1
+            counts[f'student_enrollments_{"created" if created else "updated"}'] += 1
+
+        section_group_map = defaultdict(list)
+        for group in Group.objects.filter(
+            course_offering__academic_year__in=academic_years.values(),
+            course_offering__course__organization=organization,
+        ).select_related('course_offering', 'course_offering__academic_year', 'course_offering__course'):
+            section_group_map[(group.course_offering.academic_year.name, group.name)].append(group)
+
+        for cohort_row in self._unique_student_rows(rows):
+            student = student_by_code.get(cohort_row.code)
+            if student is None:
+                continue
+            if not cohort_row.section:
+                continue
+            for group in section_group_map.get((cohort_row.cohort, cohort_row.section), []):
+                _, created = StudentEnrollment.objects.update_or_create(
+                    student=student,
+                    course_offering=group.course_offering,
+                    defaults={'group': group},
+                )
+                if created:
+                    counts['student_enrollments_created'] += 1
+                else:
+                    counts['student_enrollments_updated'] += 1
+                proven_enrollment_count += 1
+        counts['student_enrollments_proven'] = proven_enrollment_count
+        counts['student_enrollments_unavailable'] = max(0, len(student_by_code) - proven_enrollment_count)
         return counts
 
     def _print_deleted(self, deleted):
@@ -583,7 +973,16 @@ class Command(BaseCommand):
             self.stdout.write(f'  {label}: {count}')
 
     def _print_counts(self, counts):
-        self.stdout.write(f'Students: created={counts["created"]}, updated={counts["updated"]}, skipped=0, errors=0')
+        for entity in ('academic_years', 'semesters', 'users', 'students', 'doctors', 'teaching_assistants', 'courses', 'course_offerings', 'groups', 'schedules', 'student_enrollments'):
+            self.stdout.write(
+                f'{entity.replace("_", " ").title()}: '
+                f'created={counts[f"{entity}_created"]}, updated={counts[f"{entity}_updated"]}, '
+                f'skipped={counts[f"{entity}_skipped"]}, errors=0'
+            )
+        self.stdout.write(f'Schedules skipped for unresolved cohorts: {counts["schedules_skipped_unresolved_cohort"]}')
+        self.stdout.write(f'Schedules skipped for unresolved day/time: {counts["schedules_skipped_unresolved_timing"]}')
+        self.stdout.write(f'Proven StudentEnrollment records: {counts["student_enrollments_proven"]}')
+        self.stdout.write(f'Student-course enrollments unavailable from source: {counts["student_enrollments_unavailable"]}')
 
     @staticmethod
     def _name_key(name):

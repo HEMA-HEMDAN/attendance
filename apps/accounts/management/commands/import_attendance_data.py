@@ -183,7 +183,7 @@ class Command(BaseCommand):
         configured_suffix = getattr(settings, 'ATTENDANCE_IMPORT_STUDENT_PASSWORD_SUFFIX', None)
         if configured_suffix:
             return configured_suffix
-        return hashlib.sha256(settings.SECRET_KEY.encode('utf-8')).hexdigest()[:24]
+        return '#Fci!'
 
     def _organization(self, slug):
         from apps.organizations.models import Organization

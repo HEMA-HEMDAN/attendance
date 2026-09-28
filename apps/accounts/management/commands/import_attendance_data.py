@@ -958,11 +958,10 @@ class Command(BaseCommand):
                     'organization': organization,
                 },
             )
-            if user_created:
-                user.set_password(f'{staff["email"]}{password_suffix}')
-                user.save()
-            elif user.role != role:
+            if user.role != role and not user_created:
                 raise CommandError(f'Staff email has an incompatible role: {staff["email"]}')
+            user.set_password(f'{staff["email"]}@fci')
+            user.save()
             counts[f'users_{"created" if user_created else "updated"}'] += 1
             if role == Role.DOCTOR:
                 profile, created = Doctor.objects.update_or_create(
@@ -1091,8 +1090,7 @@ class Command(BaseCommand):
             })
             if not created_user:
                 user.first_name, user.last_name, user.role, user.organization = row.first_name, row.last_name, Role.STUDENT, organization
-            else:
-                user.set_password(f'{row.code}{password_suffix}')
+            user.set_password(f'{row.code}{password_suffix}')
             user.save()
             _, created_student = Student.objects.update_or_create(
                 organization=organization, student_id=row.code,

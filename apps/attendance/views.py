@@ -6,6 +6,7 @@ import logging
 import csv
 from django.utils import timezone
 from django.http import HttpResponse
+from django.db.models import Q
 from rest_framework import generics, status, filters
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -48,17 +49,21 @@ class TodayWorkView(APIView):
 
     def get(self, request):
         user = request.user
+        search = request.query_params.get('search')
+        session_type = request.query_params.get('session_type')
+        status_filter = request.query_params.get('status')
+
         if user.role == Role.DOCTOR:
-            data = get_doctor_today_work(user)
+            data = get_doctor_today_work(user, search=search, session_type=session_type, status=status_filter)
         elif user.role == Role.TEACHING_ASSISTANT:
-            data = get_ta_today_work(user)
+            data = get_ta_today_work(user, search=search, session_type=session_type, status=status_filter)
         elif user.role == Role.STUDENT:
             data = get_student_today_work(user)
         elif user.role in [Role.ADMIN, Role.SUPERADMIN]:
             # For admin, return combined work
             data = {
-                'doctor_work': get_doctor_today_work(user),
-                'ta_work': get_ta_today_work(user),
+                'doctor_work': get_doctor_today_work(user, search=search, session_type=session_type, status=status_filter),
+                'ta_work': get_ta_today_work(user, search=search, session_type=session_type, status=status_filter),
             }
         else:
             data = []
@@ -277,6 +282,25 @@ class SessionRecordsView(generics.ListAPIView):
         elif user.role == Role.TEACHING_ASSISTANT:
             qs = qs.filter(session__occurrence__group__teaching_assistant__user=user)
 
+        search = self.request.query_params.get('search')
+        if search:
+            qs = qs.filter(
+                Q(student__user__first_name__icontains=search) |
+                Q(student__user__last_name__icontains=search) |
+                Q(student__student_id__icontains=search) |
+                Q(student__user__email__icontains=search)
+            )
+
+        status_filter = self.request.query_params.get('status')
+        if status_filter and status_filter != 'ALL':
+            qs = qs.filter(status=status_filter)
+
+        distance_filter = self.request.query_params.get('distance_filter')
+        if distance_filter == 'WITHIN_RADIUS':
+            qs = qs.filter(is_within_radius=True)
+        elif distance_filter == 'OUTSIDE_RADIUS':
+            qs = qs.filter(is_within_radius=False)
+
         return qs
 
 
@@ -407,7 +431,19 @@ class SessionListCreateView(generics.ListAPIView):
             qs = qs.filter(occurrence__group__teaching_assistant__user=user)
 
         status_filter = self.request.query_params.get('status')
-        if status_filter:
+        if status_filter and status_filter != 'ALL':
             qs = qs.filter(status=status_filter)
+
+        search = self.request.query_params.get('search')
+        if search:
+            qs = qs.filter(
+                Q(occurrence__course_offering__course__code__icontains=search) |
+                Q(occurrence__course_offering__course__name__icontains=search) |
+                Q(occurrence__group__name__icontains=search)
+            )
+
+        session_type = self.request.query_params.get('session_type')
+        if session_type and session_type != 'ALL':
+            qs = qs.filter(occurrence__session_type=session_type)
 
         return qs

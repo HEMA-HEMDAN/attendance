@@ -334,8 +334,9 @@ class AttendanceVerificationService:
                     AuditAction.LOCATION_FAILED,
                 )
 
-        if location_accuracy is not None and session.max_location_accuracy_meters:
-            if location_accuracy > session.max_location_accuracy_meters:
+        if location_accuracy is not None:
+            max_acc = max(session.max_location_accuracy_meters or 200.0, 200.0)
+            if location_accuracy > max_acc:
                 raise VerificationError(
                     "Your current location isn't accurate enough",
                     'POOR_ACCURACY',
@@ -350,7 +351,10 @@ class AttendanceVerificationService:
             latitude, longitude,
         )
 
-        if distance_m > session.radius_meters:
+        effective_radius = max(session.radius_meters or 200.0, 200.0)
+        accuracy_tolerance = min(location_accuracy or 0.0, 50.0)
+
+        if distance_m > (effective_radius + accuracy_tolerance):
             audit(
                 action=AuditAction.LOCATION_FAILED,
                 actor=self.student.user,
@@ -358,6 +362,7 @@ class AttendanceVerificationService:
                 metadata={
                     'distance_m': round(distance_m, 1),
                     'radius_m': session.radius_meters,
+                    'effective_radius_m': effective_radius + accuracy_tolerance,
                     'mock': mock_location,
                 },
                 ip_address=self.request_ip,

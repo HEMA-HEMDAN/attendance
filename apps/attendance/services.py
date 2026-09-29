@@ -106,7 +106,27 @@ def sync_today_occurrences(organization):
     return occurrences
 
 
-def get_doctor_today_work(user):
+def filter_today_work_list(work_list, search=None, session_type=None, status=None):
+    filtered = work_list
+    if search:
+        s = search.strip().lower()
+        filtered = [
+            w for w in filtered
+            if s in (w.get('course_code') or '').lower()
+            or s in (w.get('course_name') or '').lower()
+            or s in (w.get('group_name') or '').lower()
+        ]
+    if session_type and session_type != 'ALL':
+        filtered = [w for w in filtered if w.get('session_type') == session_type]
+    if status and status != 'ALL':
+        if status == 'OPEN':
+            filtered = [w for w in filtered if w.get('session_status') in ['ACTIVE', 'SCHEDULED'] or w.get('can_open')]
+        else:
+            filtered = [w for w in filtered if w.get('session_status') == status]
+    return filtered
+
+
+def get_doctor_today_work(user, search=None, session_type=None, status=None):
     """
     Returns today's lecture occurrences and section details for a Doctor.
     """
@@ -176,10 +196,10 @@ def get_doctor_today_work(user):
             'sections': group_map.get(occ.course_offering_id, []),
         })
 
-    return result
+    return filter_today_work_list(result, search=search, session_type=session_type, status=status)
 
 
-def get_ta_today_work(user):
+def get_ta_today_work(user, search=None, session_type=None, status=None):
     """
     Returns today's LAB and TUTORIAL occurrences for a Teaching Assistant's assigned groups.
     """
@@ -230,7 +250,7 @@ def get_ta_today_work(user):
             'can_close': can_close,
         })
 
-    return result
+    return filter_today_work_list(result, search=search, session_type=session_type, status=status)
 
 
 def get_student_today_work(user):

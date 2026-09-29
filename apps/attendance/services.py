@@ -287,8 +287,8 @@ from apps.audit.service import audit
 from apps.audit.models import AuditAction
 from .models import SessionOccurrence, SessionOccurrenceStatus, OccurrenceType, AttendanceSession, SessionStatus, AttendanceRecord
 
-ATTENDANCE_DEFAULT_RADIUS_METERS = 50.0
-ATTENDANCE_MAX_LOCATION_ACCURACY_METERS = 50.0
+ATTENDANCE_DEFAULT_RADIUS_METERS = 200.0
+ATTENDANCE_MAX_LOCATION_ACCURACY_METERS = 200.0
 ATTENDANCE_LOCATION_MAX_AGE_SECONDS = 300
 ATTENDANCE_LOCATION_MAX_FUTURE_SKEW_SECONDS = 60
 
@@ -434,6 +434,7 @@ def open_occurrence_session(user, occurrence_id, latitude=None, longitude=None, 
         location_accuracy_meters=accuracy,
         location_captured_at=captured_at,
         radius_meters=radius_val,
+        max_location_accuracy_meters=ATTENDANCE_MAX_LOCATION_ACCURACY_METERS,
         late_after_minutes=late_after_minutes,
         status=SessionStatus.ACTIVE,
         starts_at=now,

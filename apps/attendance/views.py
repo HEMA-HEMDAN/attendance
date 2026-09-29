@@ -126,7 +126,7 @@ class AdHocSessionStartView(APIView):
                 location_captured_at=data.get('location_captured_at'),
                 duration_minutes=int(request.data.get('duration_minutes', 60)),
                 late_after_minutes=int(request.data.get('late_after_minutes', 15)),
-                radius_meters=data.get('radius_meters', 50.0),
+                radius_meters=data.get('radius_meters', 200.0),
             )
         except ValueError as exc:
             code = exc.args[1] if len(exc.args) > 1 else 'BAD_REQUEST'

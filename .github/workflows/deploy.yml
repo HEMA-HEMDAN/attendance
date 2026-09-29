@@ -73,7 +73,7 @@ jobs:
             cat <<EOF > .env.prod
             SECRET_KEY=${{ secrets.DJANGO_SECRET_KEY }}
             DEBUG=False
-            ALLOWED_HOSTS=horus.social,www.horus.social,${{ secrets.VPS_HOST }}
+            ALLOWED_HOSTS=horus.social,www.horus.social,${{ secrets.VPS_HOST }},fci.elmanasah.app
 
             DB_NAME=${{ secrets.DB_NAME }}
             DB_USER=${{ secrets.DB_USER }}
@@ -84,7 +84,7 @@ jobs:
             JWT_REFRESH_TOKEN_LIFETIME_DAYS=7
 
             CORS_ALLOW_ALL_ORIGINS=False
-            CORS_ALLOWED_ORIGINS=https://horus.social,https://www.horus.social
+            CORS_ALLOWED_ORIGINS=https://horus.social,https://www.horus.social,https://fci.elmanasah.app
             EOF
 
             # Login to GitHub Container Registry
@@ -106,4 +106,3 @@ jobs:
             docker image prune -f
 
             echo "Deployment completed successfully."
-

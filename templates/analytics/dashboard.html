@@ -435,6 +435,7 @@
         <div class="user-info">
             <span class="role-badge">{{ user.role }}</span>
             <span>{{ user.full_name|default:user.get_full_name }}</span>
+            <a class="logout-link" href="{% url 'staff-change-password-web' %}">Change Password</a>
             <a class="logout-link" href="{% url 'web-logout' %}">Logout</a>
         </div>
     </header>

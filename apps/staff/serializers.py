@@ -70,3 +70,19 @@ class TeachingAssistantSerializer(serializers.ModelSerializer):
             **validated_data
         )
         return ta
+
+
+class StaffChangePasswordSerializer(serializers.Serializer):
+    old_password = serializers.CharField(write_only=True, required=True)
+    new_password = serializers.CharField(write_only=True, min_length=8, required=True)
+
+    def validate_old_password(self, value):
+        user = self.context['request'].user
+        if not user.check_password(value):
+            raise serializers.ValidationError("Incorrect current password.")
+        return value
+
+
+class AdminResetStaffPasswordSerializer(serializers.Serializer):
+    new_password = serializers.CharField(write_only=True, min_length=8, required=True)
+

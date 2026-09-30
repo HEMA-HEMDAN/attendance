@@ -8,7 +8,14 @@ from django.utils import timezone
 from django.http import HttpResponse
 from django.db.models import Q
 from rest_framework import generics, status, filters
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
+
+
+class FlexiblePageNumberPagination(PageNumberPagination):
+    page_size = 50
+    page_size_query_param = 'page_size'
+    max_page_size = 1000
 from rest_framework.views import APIView
 
 from apps.accounts.models import Role
@@ -265,6 +272,7 @@ class CheckInView(APIView):
 class SessionRecordsView(generics.ListAPIView):
     """Scoped access to session attendance records."""
     permission_classes = [IsTeacherOrAdmin]
+    pagination_class = FlexiblePageNumberPagination
     serializer_class = AttendanceRecordSerializer
 
     def get_queryset(self):

@@ -69,3 +69,59 @@ class AnalyticsSessionAttendancePage(View):
             'rows': rows,
             'export_url': f"/api/v1/analytics/export/session/?session_id={session.id}",
         })
+
+
+class StaffChangePasswordWebView(View):
+    """Session-authenticated password change for academic staff on the Analytics Dashboard."""
+    template_name = 'analytics/change_password.html'
+
+    def get(self, request):
+        if not request.user.is_authenticated:
+            return redirect_to_login(request.get_full_path(), login_url=reverse('web-login'), redirect_field_name='next')
+        if request.user.role not in WEB_DASHBOARD_ROLES:
+            return HttpResponseForbidden('Students do not have access to analytics staff options.')
+        return render(request, self.template_name, {'user': request.user, 'error': None, 'success': None})
+
+    def post(self, request):
+        if not request.user.is_authenticated:
+            return redirect_to_login(request.get_full_path(), login_url=reverse('web-login'), redirect_field_name='next')
+        if request.user.role not in WEB_DASHBOARD_ROLES:
+            return HttpResponseForbidden('Students do not have access to analytics staff options.')
+
+        old_password = request.POST.get('old_password', '')
+        new_password = request.POST.get('new_password', '')
+        confirm_password = request.POST.get('confirm_password', '')
+
+        if not request.user.check_password(old_password):
+            return render(request, self.template_name, {
+                'user': request.user,
+                'error': 'Current password is incorrect.',
+                'success': None,
+            }, status=400)
+
+        if len(new_password) < 8:
+            return render(request, self.template_name, {
+                'user': request.user,
+                'error': 'New password must be at least 8 characters long.',
+                'success': None,
+            }, status=400)
+
+        if new_password != confirm_password:
+            return render(request, self.template_name, {
+                'user': request.user,
+                'error': 'New passwords do not match.',
+                'success': None,
+            }, status=400)
+
+        request.user.set_password(new_password)
+        request.user.save()
+
+        from django.contrib.auth import update_session_auth_hash
+        update_session_auth_hash(request, request.user)
+
+        return render(request, self.template_name, {
+            'user': request.user,
+            'error': None,
+            'success': 'Your password has been changed successfully.',
+        })
+

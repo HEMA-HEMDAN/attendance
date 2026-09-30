@@ -1,6 +1,7 @@
 """Students views."""
 
 from rest_framework import generics, filters, status
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -12,12 +13,19 @@ from .models import Student
 from .serializers import StudentSerializer, StudentCreateSerializer, CSVImportSerializer
 
 
+class FlexiblePageNumberPagination(PageNumberPagination):
+    page_size = 50
+    page_size_query_param = 'page_size'
+    max_page_size = 1000
+
+
 def _get_student_response(student):
     """Serialize a student for API response using the read serializer."""
     return StudentSerializer(student).data
 
 
 class StudentListCreateView(generics.ListCreateAPIView):
+    pagination_class = FlexiblePageNumberPagination
     filter_backends = [filters.SearchFilter]
     search_fields = ['student_id', 'user__first_name', 'user__last_name', 'user__email']
 

@@ -3,102 +3,183 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Session Attendance</title>
+    <title>Session Attendance — UniAttend Analytics</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
+      :root {
+        --bg-main: #f8fafc;
+        --bg-card: #ffffff;
+        --bg-input: #f1f5f9;
+        --primary: #4f46e5;
+        --primary-hover: #4338ca;
+        --primary-light: #e0e7ff;
+        --text-main: #0f172a;
+        --text-muted: #64748b;
+        --border-color: #e2e8f0;
+        --success: #10b981;
+        --success-light: #ecfdf5;
+        --warning: #f59e0b;
+        --warning-light: #fef3c7;
+        --danger: #ef4444;
+        --danger-light: #fee2e2;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      }
       body {
         margin: 0;
         padding: 32px;
-        background: #0b1c30;
-        color: #f8f9ff;
-        font-family: Inter, system-ui, sans-serif;
+        background: var(--bg-main);
+        color: var(--text-main);
+        min-height: 100vh;
       }
       main {
-        max-width: 1200px;
+        max-width: 1280px;
         margin: 0 auto;
       }
-      a {
-        color: #8eb3ff;
+      a.back-link {
+        color: var(--primary);
+        text-decoration: none;
+        font-weight: 700;
+        font-size: 13px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 12px;
+      }
+      a.back-link:hover {
+        text-decoration: underline;
       }
       .top {
         display: flex;
         justify-content: space-between;
         align-items: center;
         gap: 16px;
-        margin-bottom: 24px;
+        margin-bottom: 28px;
+      }
+      h1 {
+        font-size: 26px;
+        font-weight: 800;
+        letter-spacing: -0.5px;
+        margin-bottom: 4px;
+      }
+      p.sub {
+        color: var(--text-muted);
+        font-size: 14px;
+        font-weight: 500;
       }
       .panel {
-        background: #132238;
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 12px;
-        padding: 20px;
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 20px;
+        padding: 24px;
+        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
       }
       table {
         width: 100%;
-        border-collapse: collapse;
+        border-collapse: separate;
+        border-spacing: 0;
       }
       th,
       td {
-        padding: 12px 10px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--border-color);
         text-align: left;
+        font-size: 14px;
+        font-weight: 500;
       }
       th {
-        color: #8e9bb0;
-        font-size: 12px;
+        color: var(--text-muted);
+        font-size: 11px;
+        font-weight: 700;
         text-transform: uppercase;
+        letter-spacing: 0.6px;
+        background: var(--bg-main);
+      }
+      th:first-child { border-top-left-radius: 10px; }
+      th:last-child { border-top-right-radius: 10px; }
+      tr:hover td {
+        background: var(--bg-input);
+      }
+      tr:last-child td {
+        border-bottom: none;
       }
       .button {
         color: white;
-        background: #0051d5;
-        padding: 10px 14px;
-        border-radius: 6px;
+        background: var(--primary);
+        padding: 10px 20px;
+        border-radius: 10px;
         text-decoration: none;
+        font-weight: 700;
+        font-size: 14px;
+        box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
+        transition: background 0.2s;
       }
+      .button:hover {
+        background: var(--primary-hover);
+      }
+      .badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .badge-present { background: var(--success-light); color: #047857; }
+      .badge-late { background: var(--warning-light); color: #b45309; }
+      .badge-absent { background: var(--danger-light); color: #b91c1c; }
     </style>
   </head>
   <body>
     <main>
+      <a class="back-link" href="{% url 'analytics-dashboard-web' %}">← Back to Analytics Dashboard</a>
       <div class="top">
         <div>
-          <a href="{% url 'analytics-dashboard-web' %}">Analytics</a>
           <h1>
             {{ session.occurrence.course_offering.course.code }} Attendance
           </h1>
-          <p>
-            {{ session.occurrence.scheduled_date }} · {{
-            session.occurrence.session_type }} · {{
-            session.occurrence.group.name|default:'All Groups' }}
+          <p class="sub">
+            {{ session.occurrence.scheduled_date }} • {{ session.occurrence.session_type }} • {{ session.occurrence.group.name|default:'All Groups' }}
           </p>
         </div>
-        <a class="button" href="{{ export_url }}">Export Excel</a>
+        <a class="button" href="{{ export_url }}">📊 Export Excel</a>
       </div>
       <div class="panel">
         <table>
           <thead>
             <tr>
               <th>Student ID</th>
-              <th>Student</th>
+              <th>Student Name</th>
               <th>Group</th>
               <th>Status</th>
               <th>Attendance Time</th>
-              <th>Distance From Session Location</th>
-              <th>Location Accuracy</th>
+              <th>Distance from Anchor</th>
+              <th>GPS Accuracy</th>
             </tr>
           </thead>
           <tbody>
             {% for row in rows %}
             <tr>
-              <td>{{ row.student_id }}</td>
+              <td><b>{{ row.student_id }}</b></td>
               <td>{{ row.student_name }}</td>
               <td>{{ row.group }}</td>
-              <td>{{ row.status }}</td>
+              <td>
+                <span class="badge {% if row.status == 'PRESENT' %}badge-present{% elif row.status == 'LATE' %}badge-late{% else %}badge-absent{% endif %}">
+                  {{ row.status }}
+                </span>
+              </td>
               <td>{{ row.attendance_time|default:'-' }}</td>
               <td>{{ row.distance_from_session_location|default:'-' }}</td>
               <td>{{ row.location_accuracy|default:'-' }}</td>
             </tr>
             {% empty %}
             <tr>
-              <td colspan="7">No eligible students found.</td>
+              <td colspan="7" style="text-align:center; padding:32px; color:var(--text-muted);">No eligible student attendance records found.</td>
             </tr>
             {% endfor %}
           </tbody>
@@ -107,3 +188,4 @@
     </main>
   </body>
 </html>
+

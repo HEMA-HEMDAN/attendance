@@ -54,6 +54,8 @@ class CourseOfferingListCreateView(generics.ListCreateAPIView):
 
         if user.role == Role.DOCTOR:
             qs = qs.filter(doctor__user=user)
+        elif user.role == Role.TEACHING_ASSISTANT:
+            qs = qs.filter(groups__teaching_assistant__user=user).distinct()
 
         return qs
 

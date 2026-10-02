@@ -164,6 +164,7 @@ class Schedule(models.Model):
         blank=True,
         related_name='schedules',
     )
+    room_label = models.CharField(max_length=255, blank=True)
     day_of_week = models.IntegerField(help_text='0=Monday, 6=Sunday')
     start_time = models.TimeField()
     end_time = models.TimeField()

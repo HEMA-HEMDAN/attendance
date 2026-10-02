@@ -1,0 +1,13 @@
+level,department,cohort_key,label
+1,GENERAL,L1-GENERAL,Level 1 General
+1,AI,L1-AI,Level 1 Artificial Intelligence
+1,CYBERSECURITY,L1-CYBERSECURITY,Level 1 Cybersecurity
+2,GENERAL,L2-GENERAL,Level 2 General
+2,AI,L2-AI,Level 2 Artificial Intelligence
+2,CYBERSECURITY,L2-CYBERSECURITY,Level 2 Cybersecurity
+3,CS,L3-CS,Level 3 Computer Science
+3,IS,L3-IS,Level 3 Information Systems
+3,IT,L3-IT,Level 3 Information Technology
+4,CS,L4-CS,Level 4 Computer Science
+4,IS,L4-IS,Level 4 Information Systems
+4,IT,L4-IT,Level 4 Information Technology

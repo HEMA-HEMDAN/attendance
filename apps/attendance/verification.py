@@ -35,7 +35,7 @@ from .models import AttendanceSession, AttendanceRecord, DeviceChallenge, Sessio
 
 logger = logging.getLogger(__name__)
 
-LOCATION_MAX_AGE_SECONDS = 60
+LOCATION_MAX_AGE_SECONDS = 180
 CHALLENGE_TTL_SECONDS = 120
 
 

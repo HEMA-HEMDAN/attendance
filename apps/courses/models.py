@@ -134,6 +134,17 @@ class CourseOffering(models.Model):
             models.Index(fields=['academic_year', 'semester']),
         ]
 
+    def clean(self):
+        super().clean()
+        from django.core.exceptions import ValidationError
+        if hasattr(self, 'doctor') and self.doctor and hasattr(self, 'course') and self.course:
+            if self.doctor.organization_id != self.course.organization_id:
+                raise ValidationError({'doctor': "Doctor and Course Offering must belong to the same organization."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f'{self.course.code} ({self.semester})'
 
@@ -180,6 +191,23 @@ class Schedule(models.Model):
             models.Index(fields=['course_offering', 'day_of_week', 'is_active']),
             models.Index(fields=['group', 'day_of_week', 'is_active']),
         ]
+
+    def clean(self):
+        super().clean()
+        from django.core.exceptions import ValidationError
+        errors = {}
+        if self.group and self.course_offering:
+            if self.group.course_offering_id != self.course_offering_id:
+                errors['group'] = f"Group '{self.group.name}' does not belong to course offering '{self.course_offering}'."
+        if self.location and self.course_offering:
+            if self.location.organization_id != self.course_offering.course.organization_id:
+                errors['location'] = "Attendance location and course offering must belong to the same organization."
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         group_str = f' / {self.group.name}' if self.group else ''

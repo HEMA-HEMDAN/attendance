@@ -84,5 +84,22 @@ class StudentEnrollment(models.Model):
             models.Index(fields=['group']),
         ]
 
+    def clean(self):
+        super().clean()
+        from django.core.exceptions import ValidationError
+        errors = {}
+        if self.group and self.course_offering:
+            if self.group.course_offering_id != self.course_offering_id:
+                errors['group'] = f"Group '{self.group.name}' does not belong to course offering '{self.course_offering}'."
+        if hasattr(self, 'student') and self.student and hasattr(self, 'course_offering') and self.course_offering:
+            if self.student.organization_id != self.course_offering.course.organization_id:
+                errors['course_offering'] = "Student and course offering must belong to the same organization."
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f'{self.student.student_id} enrolled in {self.course_offering.course.code}'

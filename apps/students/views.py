@@ -9,8 +9,11 @@ from apps.accounts.permissions import IsOrganizationAdmin, IsStudent, IsTeacherO
 from apps.audit.service import audit
 from apps.audit.models import AuditAction
 
-from .models import Student
-from .serializers import StudentSerializer, StudentCreateSerializer, CSVImportSerializer
+from .models import Student, StudentEnrollment
+from .serializers import (
+    StudentSerializer, StudentCreateSerializer, CSVImportSerializer,
+    StudentEnrollmentSerializer, BulkStudentEnrollmentSerializer,
+)
 
 
 class FlexiblePageNumberPagination(PageNumberPagination):
@@ -211,3 +214,74 @@ class UpdatePersonalEmailView(APIView):
             metadata={'updated_field': 'personal_email'}
         )
         return Response({'detail': 'Personal email updated successfully', 'personal_email': email})
+
+
+class StudentEnrollmentListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsTeacherOrAdmin]
+    serializer_class = StudentEnrollmentSerializer
+    pagination_class = FlexiblePageNumberPagination
+
+    def get_queryset(self):
+        user = self.request.user
+        return StudentEnrollment.objects.filter(
+            student__organization=user.organization
+        ).select_related('student__user', 'course_offering__course', 'group')
+
+
+class BulkStudentEnrollmentView(APIView):
+    """
+    Bulk enroll a student into multiple course offerings in a single request.
+    `POST /api/v1/students/<id>/bulk-enroll/`
+    """
+    permission_classes = [IsOrganizationAdmin]
+
+    def post(self, request, pk):
+        from django.db import transaction
+        from apps.courses.models import CourseOffering
+        from apps.groups.models import Group
+
+        try:
+            student = Student.objects.get(pk=pk, organization=request.user.organization)
+        except Student.DoesNotExist:
+            return Response({'detail': 'Student not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = BulkStudentEnrollmentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        created_enrollments = []
+        errors = []
+
+        with transaction.atomic():
+            for idx, item in enumerate(serializer.validated_data['enrollments']):
+                offering_id = item['course_offering_id']
+                group_id = item.get('group_id')
+
+                try:
+                    offering = CourseOffering.objects.get(pk=offering_id, course__organization=request.user.organization)
+                except CourseOffering.DoesNotExist:
+                    errors.append(f"Item #{idx}: Course offering {offering_id} not found in organization.")
+                    continue
+
+                group_obj = None
+                if group_id:
+                    try:
+                        group_obj = Group.objects.get(pk=group_id, course_offering=offering)
+                    except Group.DoesNotExist:
+                        errors.append(f"Item #{idx}: Group {group_id} does not belong to course offering {offering_id}.")
+                        continue
+
+                enrollment, created = StudentEnrollment.objects.update_or_create(
+                    student=student,
+                    course_offering=offering,
+                    defaults={'group': group_obj}
+                )
+                created_enrollments.append(enrollment)
+
+            if errors:
+                transaction.set_rollback(True)
+                return Response({'detail': 'Bulk enrollment validation failed', 'errors': errors}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(
+            StudentEnrollmentSerializer(created_enrollments, many=True).data,
+            status=status.HTTP_201_CREATED,
+        )

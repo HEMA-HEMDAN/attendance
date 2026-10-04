@@ -392,13 +392,29 @@ def build_analytics_dashboard_context(request):
         'get_full_name': user.get_full_name(),
     }
 
+    limit_val = _query_value(request, 'limit')
+    if limit_val:
+        try:
+            limit = int(limit_val)
+            student_rows_out = student_rows[:limit] if limit > 0 else student_rows
+            session_rows_out = session_rows[:limit] if limit > 0 else session_rows
+        except ValueError:
+            student_rows_out = student_rows
+            session_rows_out = session_rows
+    elif _query_value(request, 'search'):
+        student_rows_out = student_rows
+        session_rows_out = session_rows
+    else:
+        student_rows_out = student_rows[:500]
+        session_rows_out = session_rows[:500]
+
     return {
         'user': user_dict,
         'metrics': metrics,
         'role_details': role_details,
         'filter_options': filter_options,
-        'student_rows': student_rows[:100],
-        'session_rows': session_rows[:100],
+        'student_rows': student_rows_out,
+        'session_rows': session_rows_out,
         'student_export_query': request.GET.urlencode() if hasattr(request, 'GET') else '',
     }
 

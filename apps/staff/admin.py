@@ -9,6 +9,7 @@ class DoctorAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
     list_display = ['title', 'get_full_name', 'email', 'department', 'organization']
     list_filter = ['organization', 'department']
     search_fields = ['user__first_name', 'user__last_name', 'user__email', 'department']
+    autocomplete_fields = ['user', 'organization']
 
     def get_full_name(self, obj):
         return obj.user.get_full_name()
@@ -24,6 +25,7 @@ class TeachingAssistantAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
     list_display = ['get_full_name', 'email', 'department', 'organization']
     list_filter = ['organization', 'department']
     search_fields = ['user__first_name', 'user__last_name', 'user__email', 'department']
+    autocomplete_fields = ['user', 'organization']
 
     def get_full_name(self, obj):
         return obj.user.get_full_name()

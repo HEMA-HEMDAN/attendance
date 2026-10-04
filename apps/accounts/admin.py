@@ -81,6 +81,7 @@ class UserAdmin(BaseUserAdmin):
     list_display = ['email', 'get_full_name', 'role', 'organization', 'is_active', 'created_at']
     list_filter = ['role', 'is_active', 'organization']
     search_fields = ['email', 'first_name', 'last_name']
+    autocomplete_fields = ['organization']
     ordering = ['email']
     readonly_fields = ['created_at', 'updated_at']
 

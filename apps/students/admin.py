@@ -32,6 +32,7 @@ class StudentAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
     list_display = ['student_id', 'get_full_name', 'get_email', 'personal_email', 'department', 'academic_level', 'organization', 'status_badge']
     list_filter = ['status', 'organization', 'department', 'academic_level']
     search_fields = ['student_id', 'user__email', 'user__first_name', 'user__last_name', 'personal_email']
+    autocomplete_fields = ['user', 'organization']
     readonly_fields = ['created_at', 'updated_at']
     inlines = [DeviceInline]
     actions = ['deactivate_students', 'activate_students', 'export_csv']
@@ -152,4 +153,5 @@ class StudentEnrollmentAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
     list_display = ['student', 'course_offering', 'group', 'created_at']
     list_filter = ['course_offering', 'group']
     search_fields = ['student__student_id', 'student__user__email', 'course_offering__course__code']
+    autocomplete_fields = ['student', 'course_offering', 'group']
 

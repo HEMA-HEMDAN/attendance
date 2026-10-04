@@ -3,6 +3,7 @@ Staff views — Doctor & Teaching Assistant endpoints.
 """
 
 from rest_framework import generics, filters, status
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from apps.accounts.permissions import IsOrganizationAdmin, IsStaffOrAdmin
 from .models import Doctor, TeachingAssistant
@@ -12,11 +13,18 @@ from .serializers import (
 )
 
 
+class FlexiblePageNumberPagination(PageNumberPagination):
+    page_size = 50
+    page_size_query_param = 'page_size'
+    max_page_size = 1000
+
+
 class DoctorListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsOrganizationAdmin]
     serializer_class = DoctorSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = ['user__first_name', 'user__last_name', 'user__email', 'department']
+    pagination_class = FlexiblePageNumberPagination
 
     def get_queryset(self):
         return Doctor.objects.filter(
@@ -39,6 +47,7 @@ class TeachingAssistantListCreateView(generics.ListCreateAPIView):
     serializer_class = TeachingAssistantSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = ['user__first_name', 'user__last_name', 'user__email', 'department']
+    pagination_class = FlexiblePageNumberPagination
 
     def get_queryset(self):
         return TeachingAssistant.objects.filter(

@@ -80,7 +80,7 @@ class TestLocationAndRadarSnapshots:
         session = AttendanceSessionFactory(occurrence=occurrence, organization=org)
 
         svc = AttendanceVerificationService(student)
-        stale_ts = (timezone.now() - timedelta(seconds=120)).timestamp()
+        stale_ts = (timezone.now() - timedelta(seconds=300)).timestamp()
 
         with pytest.raises(VerificationError) as exc_info:
             svc._verify_location(

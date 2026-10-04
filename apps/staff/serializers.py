@@ -8,15 +8,28 @@ from apps.accounts.models import User, Role
 from .models import Doctor, TeachingAssistant
 
 
+class DoctorCourseOfferingSummarySerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    course_code = serializers.CharField(source='course.code', read_only=True)
+    course_name = serializers.CharField(source='course.name', read_only=True)
+
+
+class TACourseGroupSummarySerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    name = serializers.CharField(read_only=True)
+    course_code = serializers.CharField(source='course_offering.course.code', read_only=True)
+
+
 class DoctorSerializer(serializers.ModelSerializer):
     first_name = serializers.CharField(source='user.first_name')
     last_name = serializers.CharField(source='user.last_name')
     email = serializers.EmailField(source='user.email')
+    assigned_course_offerings = DoctorCourseOfferingSummarySerializer(source='course_offerings', many=True, read_only=True)
 
     class Meta:
         model = Doctor
-        fields = ['id', 'user_id', 'email', 'first_name', 'last_name', 'department', 'title', 'created_at']
-        read_only_fields = ['id', 'user_id', 'created_at']
+        fields = ['id', 'user_id', 'email', 'first_name', 'last_name', 'department', 'title', 'assigned_course_offerings', 'created_at']
+        read_only_fields = ['id', 'user_id', 'created_at', 'assigned_course_offerings']
 
     @transaction.atomic
     def create(self, validated_data):
@@ -44,11 +57,12 @@ class TeachingAssistantSerializer(serializers.ModelSerializer):
     first_name = serializers.CharField(source='user.first_name')
     last_name = serializers.CharField(source='user.last_name')
     email = serializers.EmailField(source='user.email')
+    assigned_groups = TACourseGroupSummarySerializer(many=True, read_only=True)
 
     class Meta:
         model = TeachingAssistant
-        fields = ['id', 'user_id', 'email', 'first_name', 'last_name', 'department', 'created_at']
-        read_only_fields = ['id', 'user_id', 'created_at']
+        fields = ['id', 'user_id', 'email', 'first_name', 'last_name', 'department', 'assigned_groups', 'created_at']
+        read_only_fields = ['id', 'user_id', 'created_at', 'assigned_groups']
 
     @transaction.atomic
     def create(self, validated_data):
@@ -70,6 +84,18 @@ class TeachingAssistantSerializer(serializers.ModelSerializer):
             **validated_data
         )
         return ta
+
+
+class DoctorAssignCoursesSerializer(serializers.Serializer):
+    course_offering_ids = serializers.ListField(
+        child=serializers.IntegerField(), allow_empty=True
+    )
+
+
+class TAAssignGroupsSerializer(serializers.Serializer):
+    group_ids = serializers.ListField(
+        child=serializers.IntegerField(), allow_empty=True
+    )
 
 
 class StaffChangePasswordSerializer(serializers.Serializer):

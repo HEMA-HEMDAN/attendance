@@ -134,6 +134,17 @@ class CourseOffering(models.Model):
             models.Index(fields=['academic_year', 'semester']),
         ]
 
+    def clean(self):
+        super().clean()
+        from django.core.exceptions import ValidationError
+        if hasattr(self, 'doctor') and self.doctor and hasattr(self, 'course') and self.course:
+            if self.doctor.organization_id != self.course.organization_id:
+                raise ValidationError({'doctor': "Doctor and Course Offering must belong to the same organization."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f'{self.course.code} ({self.semester})'
 
@@ -151,6 +162,22 @@ class Schedule(models.Model):
         blank=True,
         related_name='schedules',
         help_text='Required for LAB and TUTORIAL; null for LECTURE',
+    )
+    doctor = models.ForeignKey(
+        'staff.Doctor',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='schedules',
+        help_text='Auto-derived from doctor teaching course offering',
+    )
+    teaching_assistant = models.ForeignKey(
+        'staff.TeachingAssistant',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='schedules',
+        help_text='Auto-derived from TA assigned to group',
     )
     session_type = models.CharField(
         max_length=20,
@@ -179,7 +206,43 @@ class Schedule(models.Model):
         indexes = [
             models.Index(fields=['course_offering', 'day_of_week', 'is_active']),
             models.Index(fields=['group', 'day_of_week', 'is_active']),
+            models.Index(fields=['doctor', 'day_of_week', 'is_active']),
+            models.Index(fields=['teaching_assistant', 'day_of_week', 'is_active']),
         ]
+
+    def _sync_staff_relations(self):
+        if self.course_offering_id:
+            if self.course_offering and self.course_offering.doctor_id:
+                self.doctor = self.course_offering.doctor
+            elif self.doctor_id:
+                CourseOffering.objects.filter(pk=self.course_offering_id, doctor__isnull=True).update(doctor_id=self.doctor_id)
+
+        if self.group_id:
+            if self.group and self.group.teaching_assistant_id:
+                self.teaching_assistant = self.group.teaching_assistant
+            elif self.teaching_assistant_id:
+                from apps.groups.models import Group
+                Group.objects.filter(pk=self.group_id, teaching_assistant__isnull=True).update(teaching_assistant_id=self.teaching_assistant_id)
+
+    def clean(self):
+        super().clean()
+        from django.core.exceptions import ValidationError
+        errors = {}
+        self._sync_staff_relations()
+
+        if self.group and self.course_offering:
+            if self.group.course_offering_id != self.course_offering_id:
+                errors['group'] = f"Group '{self.group.name}' does not belong to course offering '{self.course_offering}'."
+        if self.location and self.course_offering:
+            if self.location.organization_id != self.course_offering.course.organization_id:
+                errors['location'] = "Attendance location and course offering must belong to the same organization."
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self._sync_staff_relations()
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         group_str = f' / {self.group.name}' if self.group else ''

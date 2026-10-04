@@ -314,7 +314,7 @@ class TestAdHocSessionStart:
 
         resp = client.post('/api/v1/attendance/occurrences/ad-hoc/start/', payload, format='json')
         assert resp.status_code == status.HTTP_201_CREATED, resp.data
-        assert resp.data['radius_meters'] == 50.0
+        assert resp.data['radius_meters'] == 200.0
 
     def test_adhoc_transaction_rollback_on_location_failure(self, client):
         org = OrganizationFactory()

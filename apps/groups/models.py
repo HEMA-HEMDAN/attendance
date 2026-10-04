@@ -38,5 +38,16 @@ class Group(models.Model):
             models.Index(fields=['teaching_assistant']),
         ]
 
+    def clean(self):
+        super().clean()
+        from django.core.exceptions import ValidationError
+        if hasattr(self, 'teaching_assistant') and self.teaching_assistant and hasattr(self, 'course_offering') and self.course_offering:
+            if self.teaching_assistant.organization_id != self.course_offering.course.organization_id:
+                raise ValidationError({'teaching_assistant': "Teaching Assistant and Group must belong to the same organization."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f'{self.course_offering.course.code} — {self.name}'

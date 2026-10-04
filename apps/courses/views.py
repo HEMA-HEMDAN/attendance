@@ -98,6 +98,25 @@ class ScheduleListCreateView(generics.ListCreateAPIView):
         return qs
 
 
+class ScheduleDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """View, update, or delete a specific schedule slot."""
+    permission_classes = [IsTeacherOrAdmin]
+    serializer_class = ScheduleSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = Schedule.objects.filter(
+            course_offering__course__organization=user.organization
+        ).select_related('course_offering__course', 'group')
+
+        if user.role == Role.DOCTOR:
+            qs = qs.filter(course_offering__doctor__user=user)
+        elif user.role == Role.TEACHING_ASSISTANT:
+            qs = qs.filter(group__teaching_assistant__user=user)
+
+        return qs
+
+
 class ScheduleExceptionListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsTeacherOrAdmin]
     serializer_class = ScheduleExceptionSerializer

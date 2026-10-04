@@ -7,12 +7,16 @@ from .models import AcademicYear, Semester, Course, CourseOffering, Schedule, Sc
 class AcademicYearAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
     list_display = ['name', 'organization', 'start_date', 'end_date', 'is_active']
     list_filter = ['organization', 'is_active']
+    search_fields = ['name']
+    autocomplete_fields = ['organization']
 
 
 @admin.register(Semester)
 class SemesterAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
     list_display = ['name', 'academic_year', 'organization', 'start_date', 'end_date', 'is_active']
     list_filter = ['academic_year', 'is_active']
+    search_fields = ['name']
+    autocomplete_fields = ['academic_year', 'organization']
 
 
 @admin.register(Course)
@@ -20,6 +24,7 @@ class CourseAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
     list_display = ['code', 'name', 'department', 'organization']
     list_filter = ['organization', 'department']
     search_fields = ['code', 'name']
+    autocomplete_fields = ['organization']
 
 
 @admin.register(CourseOffering)
@@ -33,7 +38,8 @@ class CourseOfferingAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
     }
     list_display = ['course', 'academic_year', 'semester', 'doctor', 'status']
     list_filter = ['academic_year', 'semester', 'status']
-    search_fields = ['course__code', 'course__name']
+    search_fields = ['course__code', 'course__name', 'doctor__user__first_name', 'doctor__user__last_name']
+    autocomplete_fields = ['course', 'academic_year', 'semester', 'doctor']
 
 
 @admin.register(Schedule)
@@ -46,6 +52,8 @@ class ScheduleAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
     }
     list_display = ['course_offering', 'group', 'session_type', 'day_of_week', 'start_time', 'end_time', 'is_active']
     list_filter = ['session_type', 'day_of_week', 'is_active']
+    search_fields = ['course_offering__course__code', 'course_offering__course__name', 'group__name']
+    autocomplete_fields = ['course_offering', 'group', 'location']
 
 
 @admin.register(ScheduleException)
@@ -54,3 +62,5 @@ class ScheduleExceptionAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
     related_org_fields = {'schedule': 'course_offering__course__organization'}
     list_display = ['schedule', 'date', 'exception_type', 'reason']
     list_filter = ['exception_type', 'date']
+    search_fields = ['schedule__course_offering__course__code', 'reason']
+    autocomplete_fields = ['schedule']

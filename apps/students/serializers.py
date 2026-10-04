@@ -10,7 +10,36 @@ from rest_framework import serializers
 
 from apps.accounts.models import User, Role
 from apps.groups.models import Group
-from .models import Student
+from .models import Student, StudentEnrollment
+
+
+class StudentEnrollmentSerializer(serializers.ModelSerializer):
+    course_code = serializers.CharField(source='course_offering.course.code', read_only=True)
+    course_name = serializers.CharField(source='course_offering.course.name', read_only=True)
+    group_name = serializers.CharField(source='group.name', read_only=True)
+
+    class Meta:
+        model = StudentEnrollment
+        fields = ['id', 'student', 'course_offering', 'course_code', 'course_name', 'group', 'group_name', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+    def validate(self, attrs):
+        group = attrs.get('group')
+        course_offering = attrs.get('course_offering')
+        if group and course_offering and group.course_offering != course_offering:
+            raise serializers.ValidationError({
+                'group': f"Group '{group.name}' does not belong to course offering '{course_offering.course.code}'."
+            })
+        return attrs
+
+
+class BulkEnrollmentItemSerializer(serializers.Serializer):
+    course_offering_id = serializers.IntegerField()
+    group_id = serializers.IntegerField(required=False, allow_null=True)
+
+
+class BulkStudentEnrollmentSerializer(serializers.Serializer):
+    enrollments = BulkEnrollmentItemSerializer(many=True)
 
 
 class StudentSerializer(serializers.ModelSerializer):
@@ -18,14 +47,15 @@ class StudentSerializer(serializers.ModelSerializer):
     first_name = serializers.CharField(source='user.first_name', read_only=True)
     last_name = serializers.CharField(source='user.last_name', read_only=True)
     is_active = serializers.BooleanField(source='user.is_active', read_only=True)
+    enrollments = StudentEnrollmentSerializer(many=True, read_only=True)
 
     class Meta:
         model = Student
         fields = [
             'id', 'student_id', 'email', 'personal_email', 'first_name', 'last_name',
-            'phone', 'status', 'is_active', 'created_at',
+            'phone', 'status', 'is_active', 'enrollments', 'created_at',
         ]
-        read_only_fields = ['id', 'created_at', 'email', 'first_name', 'last_name', 'is_active']
+        read_only_fields = ['id', 'created_at', 'email', 'first_name', 'last_name', 'is_active', 'enrollments']
 
 
 class StudentCreateSerializer(serializers.Serializer):

@@ -19,6 +19,7 @@ class DeviceAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
     ]
     list_filter = ['status', 'platform', 'organization', 'biometric_invalidated']
     search_fields = ['student__student_id', 'student__user__email', 'device_name']
+    autocomplete_fields = ['student', 'organization']
     readonly_fields = [
         'student', 'organization', 'device_fingerprint', 'platform',
         'device_name', 'os_version', 'registered_at', 'revoked_at',

@@ -15,6 +15,33 @@ from .models import Student, StudentStatus, StudentEnrollment
 from apps.accounts.admin import OrgScopedAdminMixin
 
 
+from django import forms
+
+class StudentEnrollmentAdminForm(forms.ModelForm):
+    class Meta:
+        model = StudentEnrollment
+        fields = '__all__'
+
+    def clean(self):
+        cleaned_data = super().clean()
+        group = cleaned_data.get('group')
+        course_offering = cleaned_data.get('course_offering')
+        if group and course_offering and group.course_offering != course_offering:
+            raise forms.ValidationError(
+                f"Selected group '{group.name}' does not belong to course offering '{course_offering}'."
+            )
+        return cleaned_data
+
+
+class StudentEnrollmentInline(admin.TabularInline):
+    model = StudentEnrollment
+    form = StudentEnrollmentAdminForm
+    extra = 1
+    autocomplete_fields = ['course_offering', 'group']
+    verbose_name = 'Course Enrollment'
+    verbose_name_plural = 'Course Enrollments'
+
+
 class DeviceInline(admin.TabularInline):
     model = Device
     extra = 0
@@ -32,8 +59,9 @@ class StudentAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
     list_display = ['student_id', 'get_full_name', 'get_email', 'personal_email', 'department', 'academic_level', 'organization', 'status_badge']
     list_filter = ['status', 'organization', 'department', 'academic_level']
     search_fields = ['student_id', 'user__email', 'user__first_name', 'user__last_name', 'personal_email']
+    autocomplete_fields = ['user', 'organization']
     readonly_fields = ['created_at', 'updated_at']
-    inlines = [DeviceInline]
+    inlines = [StudentEnrollmentInline, DeviceInline]
     actions = ['deactivate_students', 'activate_students', 'export_csv']
 
     fieldsets = (
@@ -143,6 +171,7 @@ class StudentAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
 
 @admin.register(StudentEnrollment)
 class StudentEnrollmentAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
+    form = StudentEnrollmentAdminForm
     org_field = 'student__organization'
     related_org_fields = {
         'student': 'organization',
@@ -152,4 +181,5 @@ class StudentEnrollmentAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
     list_display = ['student', 'course_offering', 'group', 'created_at']
     list_filter = ['course_offering', 'group']
     search_fields = ['student__student_id', 'student__user__email', 'course_offering__course__code']
+    autocomplete_fields = ['student', 'course_offering', 'group']
 

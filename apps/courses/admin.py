@@ -27,12 +27,18 @@ class CourseAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
     autocomplete_fields = ['organization']
 
 
+from .forms import ScheduleAdminForm
+
+
 class ScheduleInline(admin.TabularInline):
     model = Schedule
+    form = ScheduleAdminForm
     extra = 1
-    autocomplete_fields = ['group', 'location']
     verbose_name = 'Course Schedule'
     verbose_name_plural = 'Course Schedules'
+
+    class Media:
+        js = ('admin/js/schedule_group_filter.js',)
 
 
 @admin.register(CourseOffering)
@@ -53,6 +59,7 @@ class CourseOfferingAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
 
 @admin.register(Schedule)
 class ScheduleAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
+    form = ScheduleAdminForm
     org_field = 'course_offering__course__organization'
     related_org_fields = {
         'course_offering': 'course__organization',
@@ -73,6 +80,9 @@ class ScheduleAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
         'teaching_assistant__user__last_name',
     ]
     autocomplete_fields = ['course_offering', 'group', 'location', 'doctor', 'teaching_assistant']
+
+    class Media:
+        js = ('admin/js/schedule_group_filter.js',)
 
 
 @admin.register(ScheduleException)

@@ -102,3 +102,23 @@ class TestSmartStaffAssignments:
         res = self.client.post(url, payload, format='json')
         assert res.status_code == status.HTTP_200_OK
         assert len(res.data['assigned_groups']) == 2
+
+    def test_doctor_schedules_api(self):
+        """Test retrieving all schedules for course offerings led by a Doctor."""
+        ScheduleFactory(course_offering=self.offering1, session_type='LECTURE', day_of_week=0)
+        ScheduleFactory(course_offering=self.offering2, session_type='LECTURE', day_of_week=2)
+
+        url = f'/api/v1/staff/doctors/{self.doctor.id}/schedules/'
+        res = self.client.get(url)
+        assert res.status_code == status.HTTP_200_OK
+        assert res.data['count'] == 2
+
+    def test_ta_schedules_api(self):
+        """Test retrieving all schedules for groups assigned to a TA."""
+        ScheduleFactory(course_offering=self.offering1, group=self.group1, session_type='LAB', day_of_week=1)
+        ScheduleFactory(course_offering=self.offering2, group=self.group2, session_type='LAB', day_of_week=3)
+
+        url = f'/api/v1/staff/assistants/{self.ta.id}/schedules/'
+        res = self.client.get(url)
+        assert res.status_code == status.HTTP_200_OK
+        assert res.data['count'] == 2

@@ -87,7 +87,7 @@ class TestLocationVerification:
                 session=session,
                 latitude=float(location.latitude),
                 longitude=float(location.longitude),
-                location_accuracy=200.0,
+                location_accuracy=250.0,
                 location_timestamp=timezone.now().timestamp(),
                 mock_location=False,
             )

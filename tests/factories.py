@@ -158,8 +158,17 @@ class CourseOfferingFactory(DjangoModelFactory):
     course = factory.SubFactory(CourseFactory)
     academic_year = factory.SubFactory(AcademicYearFactory, organization=factory.SelfAttribute('..course.organization'))
     semester = factory.SubFactory(SemesterFactory, academic_year=factory.SelfAttribute('..academic_year'))
-    doctor = factory.SubFactory(DoctorFactory, organization=factory.SelfAttribute('..course.organization'))
+    doctor = None
     status = 'ACTIVE'
+
+    @classmethod
+    def _create(cls, model_class, *args, **kwargs):
+        doctor = kwargs.get('doctor')
+        course = kwargs.get('course')
+        if doctor and course and course.organization_id != doctor.organization_id:
+            course.organization = doctor.organization
+            course.save(update_fields=['organization'])
+        return super()._create(model_class, *args, **kwargs)
 
 
 class GroupFactory(DjangoModelFactory):
@@ -168,8 +177,17 @@ class GroupFactory(DjangoModelFactory):
 
     course_offering = factory.SubFactory(CourseOfferingFactory)
     name = factory.Sequence(lambda n: f'Group {n}')
-    teaching_assistant = factory.SubFactory(TeachingAssistantFactory, organization=factory.SelfAttribute('..course_offering.course.organization'))
+    teaching_assistant = None
     status = 'ACTIVE'
+
+    @classmethod
+    def _create(cls, model_class, *args, **kwargs):
+        ta = kwargs.get('teaching_assistant')
+        co = kwargs.get('course_offering')
+        if ta and co and co.course.organization_id != ta.organization_id:
+            co.course.organization = ta.organization
+            co.course.save(update_fields=['organization'])
+        return super()._create(model_class, *args, **kwargs)
 
 
 class StudentEnrollmentFactory(DjangoModelFactory):
@@ -178,6 +196,15 @@ class StudentEnrollmentFactory(DjangoModelFactory):
 
     student = factory.SubFactory(StudentFactory)
     course_offering = factory.SubFactory(CourseOfferingFactory)
+
+    @classmethod
+    def _create(cls, model_class, *args, **kwargs):
+        student = kwargs.get('student')
+        co = kwargs.get('course_offering')
+        if student and co and co.course.organization_id != student.organization_id:
+            co.course.organization = student.organization
+            co.course.save(update_fields=['organization'])
+        return super()._create(model_class, *args, **kwargs)
     group = factory.SubFactory(GroupFactory, course_offering=factory.SelfAttribute('..course_offering'))
 
 
@@ -226,7 +253,11 @@ class AttendanceSessionFactory(DjangoModelFactory):
 
     occurrence = factory.SubFactory(SessionOccurrenceFactory)
     organization = factory.LazyAttribute(lambda o: o.occurrence.course_offering.course.organization)
-    opened_by = factory.LazyAttribute(lambda o: o.occurrence.course_offering.doctor.user)
+    opened_by = factory.LazyAttribute(
+        lambda o: o.occurrence.course_offering.doctor.user
+        if (o.occurrence and o.occurrence.course_offering and o.occurrence.course_offering.doctor)
+        else AdminUserFactory(organization=o.occurrence.course_offering.course.organization)
+    )
     latitude = 24.7136
     longitude = 46.6753
     radius_meters = 50.0

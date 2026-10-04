@@ -6,6 +6,7 @@ from rest_framework import generics, filters, status
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from apps.accounts.permissions import IsOrganizationAdmin, IsStaffOrAdmin
+from apps.courses.serializers import ScheduleSerializer
 from .models import Doctor, TeachingAssistant
 from .serializers import (
     DoctorSerializer, TeachingAssistantSerializer,
@@ -132,6 +133,38 @@ class TAAssignGroupsView(generics.GenericAPIView):
             groups.update(teaching_assistant=ta)
 
         return Response(TeachingAssistantSerializer(ta).data, status=status.HTTP_200_OK)
+
+
+class DoctorSchedulesView(generics.ListAPIView):
+    """Retrieve all weekly schedules for course offerings led by a specific Doctor."""
+    permission_classes = [IsStaffOrAdmin]
+    serializer_class = ScheduleSerializer
+    pagination_class = FlexiblePageNumberPagination
+
+    def get_queryset(self):
+        doctor_id = self.kwargs['pk']
+        from apps.courses.models import Schedule
+        return Schedule.objects.filter(
+            course_offering__doctor_id=doctor_id,
+            course_offering__course__organization=self.request.user.organization,
+            is_active=True,
+        ).select_related('course_offering__course', 'course_offering__doctor__user', 'group__teaching_assistant__user', 'location').order_by('day_of_week', 'start_time')
+
+
+class TASchedulesView(generics.ListAPIView):
+    """Retrieve all weekly schedules for groups assigned to a specific Teaching Assistant."""
+    permission_classes = [IsStaffOrAdmin]
+    serializer_class = ScheduleSerializer
+    pagination_class = FlexiblePageNumberPagination
+
+    def get_queryset(self):
+        ta_id = self.kwargs['pk']
+        from apps.courses.models import Schedule
+        return Schedule.objects.filter(
+            group__teaching_assistant_id=ta_id,
+            course_offering__course__organization=self.request.user.organization,
+            is_active=True,
+        ).select_related('course_offering__course', 'course_offering__doctor__user', 'group__teaching_assistant__user', 'location').order_by('day_of_week', 'start_time')
 
 
 class StaffChangePasswordView(generics.GenericAPIView):

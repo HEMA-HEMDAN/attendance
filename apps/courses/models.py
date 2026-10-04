@@ -146,7 +146,7 @@ class CourseOffering(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f'{self.course.code} ({self.semester})'
+        return f'{self.course.code} ({self.course.name})'
 
 
 class Schedule(models.Model):

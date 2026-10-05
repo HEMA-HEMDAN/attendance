@@ -148,9 +148,9 @@ class AttendanceSession(models.Model):
         blank=True,
         help_text="Timestamp when the opener's location was captured",
     )
-    radius_meters = models.FloatField(default=200.0)
+    radius_meters = models.FloatField(default=250.0)
     max_location_accuracy_meters = models.FloatField(
-        default=200.0,
+        default=250.0,
         help_text='Reject location data with accuracy worse than this value (metres)',
     )
     late_after_minutes = models.PositiveIntegerField(

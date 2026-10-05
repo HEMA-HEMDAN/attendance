@@ -35,8 +35,8 @@ from .models import AttendanceSession, AttendanceRecord, DeviceChallenge, Sessio
 
 logger = logging.getLogger(__name__)
 
-LOCATION_MAX_AGE_SECONDS = 180
-CHALLENGE_TTL_SECONDS = 120
+LOCATION_MAX_AGE_SECONDS = 1800
+CHALLENGE_TTL_SECONDS = 1000
 
 
 class VerificationError(Exception):
@@ -335,7 +335,7 @@ class AttendanceVerificationService:
                 )
 
         if location_accuracy is not None:
-            max_acc = max(session.max_location_accuracy_meters or 200.0, 200.0)
+            max_acc = max(session.max_location_accuracy_meters or 250.0, 250.0)
             if location_accuracy > max_acc:
                 raise VerificationError(
                     "Your current location isn't accurate enough",
@@ -351,8 +351,8 @@ class AttendanceVerificationService:
             latitude, longitude,
         )
 
-        effective_radius = max(session.radius_meters or 200.0, 200.0)
-        accuracy_tolerance = min(location_accuracy or 0.0, 50.0)
+        effective_radius = max(session.radius_meters or 250.0, 250.0)
+        accuracy_tolerance = min(location_accuracy or 0.0, 75.0)
 
         if distance_m > (effective_radius + accuracy_tolerance):
             audit(

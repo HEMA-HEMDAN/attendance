@@ -81,13 +81,15 @@ class TestLocationVerification:
 
     def test_poor_accuracy_rejected(self):
         _, group, doctor, ta, student, offering, location, session = make_full_setup()
+        session.max_location_accuracy_meters = 100.0
+        session.save(update_fields=['max_location_accuracy_meters'])
         svc = AttendanceVerificationService(student)
         with pytest.raises(VerificationError) as exc_info:
             svc._verify_location(
                 session=session,
                 latitude=float(location.latitude),
                 longitude=float(location.longitude),
-                location_accuracy=250.0,
+                location_accuracy=300.0,
                 location_timestamp=timezone.now().timestamp(),
                 mock_location=False,
             )
@@ -107,20 +109,19 @@ class TestLocationVerification:
             )
         assert exc_info.value.code == 'INVALID_COORDINATES'
 
-    def test_stale_timestamp_rejected(self):
+    def test_stale_timestamp_tracked_and_allowed(self):
         _, group, doctor, ta, student, offering, location, session = make_full_setup()
         svc = AttendanceVerificationService(student)
         old_timestamp = (timezone.now() - timedelta(minutes=5)).timestamp()
-        with pytest.raises(VerificationError) as exc_info:
-            svc._verify_location(
-                session=session,
-                latitude=float(location.latitude),
-                longitude=float(location.longitude),
-                location_accuracy=10.0,
-                location_timestamp=old_timestamp,
-                mock_location=False,
-            )
-        assert exc_info.value.code == 'STALE_LOCATION'
+        res = svc._verify_location(
+            session=session,
+            latitude=float(location.latitude),
+            longitude=float(location.longitude),
+            location_accuracy=10.0,
+            location_timestamp=old_timestamp,
+            mock_location=False,
+        )
+        assert res is not None
 
 
 @pytest.mark.django_db

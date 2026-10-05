@@ -20,29 +20,29 @@ class DeviceRegisterView(generics.CreateAPIView):
     def create(self, request, *args, **kwargs):
         student = request.user.student_profile
         
-        # Check if student has an active session for an enrolled course offering or group
-        from apps.attendance.models import AttendanceSession, SessionStatus
-
-        enrollments = student.enrollments.all()
-        offering_ids = [e.course_offering_id for e in enrollments]
-        group_ids = [e.group_id for e in enrollments if e.group_id]
-
-        has_active = AttendanceSession.objects.filter(
-            organization=student.organization,
-            status=SessionStatus.ACTIVE
-        ).filter(
-            Q(occurrence__course_offering_id__in=offering_ids, occurrence__group__isnull=True) |
-            Q(occurrence__group_id__in=group_ids)
-        ).exists()
-
-        if has_active:
-            return Response(
-                {
-                    'detail': 'Device registration is locked while an active attendance session is in progress for your enrolled course/group.',
-                    'code': 'DEVICE_REGISTRATION_LOCKED_ACTIVE_SESSION',
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        # Commented out per requirements: Allow device registration even while an active attendance session is open
+        # from apps.attendance.models import AttendanceSession, SessionStatus
+        #
+        # enrollments = student.enrollments.all()
+        # offering_ids = [e.course_offering_id for e in enrollments]
+        # group_ids = [e.group_id for e in enrollments if e.group_id]
+        #
+        # has_active = AttendanceSession.objects.filter(
+        #     organization=student.organization,
+        #     status=SessionStatus.ACTIVE
+        # ).filter(
+        #     Q(occurrence__course_offering_id__in=offering_ids, occurrence__group__isnull=True) |
+        #     Q(occurrence__group_id__in=group_ids)
+        # ).exists()
+        #
+        # if has_active:
+        #     return Response(
+        #         {
+        #             'detail': 'Device registration is locked while an active attendance session is in progress for your enrolled course/group.',
+        #             'code': 'DEVICE_REGISTRATION_LOCKED_ACTIVE_SESSION',
+        #         },
+        #         status=status.HTTP_400_BAD_REQUEST
+        #     )
 
         serializer = self.get_serializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)

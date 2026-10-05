@@ -58,8 +58,7 @@ class TestDeviceRules:
                 'public_key': 'mock_pem_rsa_2048',
                 'device_name': 'Phone 2',
             })
-            assert res.status_code == 400
-            assert res.data['code'] == 'DEVICE_REGISTRATION_LOCKED_ACTIVE_SESSION'
+            assert res.status_code == 201
 
     def test_device_registration_not_locked_by_unrelated_active_session(self, client):
         org = OrganizationFactory()

@@ -327,12 +327,13 @@ class AttendanceVerificationService:
                 location_timestamp, tz=datetime.timezone.utc
             )
             age_seconds = (timezone.now() - location_time).total_seconds()
-            if age_seconds > LOCATION_MAX_AGE_SECONDS or age_seconds < -10:
-                raise VerificationError(
-                    'Location timestamp is stale or invalid',
-                    'STALE_LOCATION',
-                    AuditAction.LOCATION_FAILED,
-                )
+            # Commented out per requirements: Track the timestamp but do not reject/validate if stale or out of range
+            # if age_seconds > LOCATION_MAX_AGE_SECONDS or age_seconds < -10:
+            #     raise VerificationError(
+            #         'Location timestamp is stale or invalid',
+            #         'STALE_LOCATION',
+            #         AuditAction.LOCATION_FAILED,
+            #     )
 
         if location_accuracy is not None:
             max_acc = max(session.max_location_accuracy_meters or 250.0, 250.0)

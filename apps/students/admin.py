@@ -70,6 +70,9 @@ class StudentAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
     inlines = [StudentEnrollmentInline, DeviceInline]
     actions = ['deactivate_students', 'activate_students', 'export_csv']
 
+    class Media:
+        js = ('admin/js/schedule_group_filter.js',)
+
     fieldsets = (
         ('Account', {'fields': ('user', 'organization', 'status')}),
         ('Academic Info', {'fields': ('student_id', 'department', 'academic_level')}),

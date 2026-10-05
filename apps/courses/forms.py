@@ -6,11 +6,12 @@ from .models import Schedule
 class GroupSelectWidget(forms.Select):
     def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
         option = super().create_option(name, value, label, selected, index, subindex=subindex, attrs=attrs)
-        if value and getattr(value, 'value', None):
+        val = getattr(value, 'value', value)
+        if val:
             try:
-                grp = Group.objects.only('id', 'course_offering_id').get(pk=value.value)
+                grp = Group.objects.only('id', 'course_offering_id').get(pk=val)
                 option['attrs']['data-course-offering'] = grp.course_offering_id
-            except Group.DoesNotExist:
+            except (Group.DoesNotExist, ValueError, TypeError):
                 pass
         return option
 

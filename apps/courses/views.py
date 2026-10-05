@@ -128,3 +128,22 @@ class ScheduleExceptionListCreateView(generics.ListCreateAPIView):
         return ScheduleException.objects.filter(
             schedule__course_offering__course__organization=self.request.user.organization
         )
+
+
+def get_groups_by_offering(request):
+    from django.http import JsonResponse
+    from apps.groups.models import Group
+
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+
+    offering_id = request.GET.get('offering_id')
+    if not offering_id or not str(offering_id).isdigit():
+        return JsonResponse({'groups': []})
+
+    qs = Group.objects.filter(course_offering_id=int(offering_id))
+    if getattr(request.user, 'organization_id', None):
+        qs = qs.filter(course_offering__course__organization_id=request.user.organization_id)
+
+    groups = list(qs.order_by('name').values('id', 'name'))
+    return JsonResponse({'groups': groups})

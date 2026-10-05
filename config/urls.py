@@ -8,8 +8,10 @@ from apps.analytics.web_views import (
     AnalyticsDashboardPage, AnalyticsStudentDetailPage,
     AnalyticsSessionAttendancePage, StaffChangePasswordWebView,
 )
+from apps.courses.views import get_groups_by_offering
 
 urlpatterns = [
+    path('admin/groups-by-offering/', get_groups_by_offering, name='groups-by-offering'),
     path('admin/', admin.site.urls),
     path('login/', WebLoginView.as_view(), name='web-login'),
     path('logout/', WebLogoutView.as_view(), name='web-logout'),

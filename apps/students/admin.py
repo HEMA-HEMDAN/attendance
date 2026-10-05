@@ -10,9 +10,9 @@ from django.utils.html import format_html
 from django.http import HttpResponse
 
 from apps.accounts.admin import OrgScopedAdminMixin
+from apps.courses.forms import GroupSelectWidget
 from apps.devices.models import Device
 from .models import Student, StudentStatus, StudentEnrollment
-from apps.accounts.admin import OrgScopedAdminMixin
 
 
 from django import forms
@@ -21,6 +21,9 @@ class StudentEnrollmentAdminForm(forms.ModelForm):
     class Meta:
         model = StudentEnrollment
         fields = '__all__'
+        widgets = {
+            'group': GroupSelectWidget(),
+        }
 
     def clean(self):
         cleaned_data = super().clean()
@@ -37,9 +40,12 @@ class StudentEnrollmentInline(admin.TabularInline):
     model = StudentEnrollment
     form = StudentEnrollmentAdminForm
     extra = 1
-    autocomplete_fields = ['course_offering', 'group']
+    autocomplete_fields = ['course_offering']
     verbose_name = 'Course Enrollment'
     verbose_name_plural = 'Course Enrollments'
+
+    class Media:
+        js = ('admin/js/schedule_group_filter.js',)
 
 
 class DeviceInline(admin.TabularInline):
@@ -181,5 +187,8 @@ class StudentEnrollmentAdmin(OrgScopedAdminMixin, admin.ModelAdmin):
     list_display = ['student', 'course_offering', 'group', 'created_at']
     list_filter = ['course_offering', 'group']
     search_fields = ['student__student_id', 'student__user__email', 'course_offering__course__code']
-    autocomplete_fields = ['student', 'course_offering', 'group']
+    autocomplete_fields = ['student', 'course_offering']
+
+    class Media:
+        js = ('admin/js/schedule_group_filter.js',)
 

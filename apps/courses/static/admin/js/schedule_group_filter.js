@@ -1,48 +1,105 @@
-document.addEventListener('DOMContentLoaded', function() {
-    function filterGroupOptions(container) {
-        var courseSelect = container.querySelector('select[name$="-course_offering"]');
-        var groupSelect = container.querySelector('select[name$="-group"]');
+(function() {
+    function initGroupFiltering() {
+        var $ = (window.django && window.django.jQuery) ? window.django.jQuery : (window.jQuery || null);
 
-        if (!courseSelect || !groupSelect) return;
+        function setupRow(container) {
+            var courseSelect = container.querySelector('select[name$="course_offering"]');
+            var groupSelect = container.querySelector('select[name$="group"]');
 
-        function updateGroups() {
-            var selectedOfferingId = courseSelect.value;
-            var currentGroupVal = groupSelect.value;
-            var hasMatchingGroup = false;
+            if (!courseSelect || !groupSelect) return;
 
-            Array.from(groupSelect.options).forEach(function(opt) {
-                if (!opt.value) {
-                    opt.hidden = false;
-                    opt.disabled = false;
+            // Prevent duplicate initialization on same row
+            if (groupSelect.dataset.filterInitialized === 'true') return;
+            groupSelect.dataset.filterInitialized = 'true';
+
+            var initialGroupVal = groupSelect.value;
+
+            function loadGroupsForOffering(offeringId, targetVal) {
+                if (!offeringId) {
+                    groupSelect.disabled = true;
+                    groupSelect.innerHTML = '<option value="">Select a course offering first...</option>';
                     return;
                 }
-                var offeringId = opt.getAttribute('data-course-offering');
-                if (!selectedOfferingId || offeringId === selectedOfferingId) {
-                    opt.hidden = false;
-                    opt.disabled = false;
-                    if (opt.value === currentGroupVal) {
-                        hasMatchingGroup = true;
-                    }
-                } else {
-                    opt.hidden = true;
-                    opt.disabled = true;
-                }
-            });
 
-            if (!hasMatchingGroup && currentGroupVal) {
-                groupSelect.value = "";
+                groupSelect.disabled = true;
+                groupSelect.innerHTML = '<option value="">Loading groups...</option>';
+
+                fetch('/admin/groups-by-offering/?offering_id=' + encodeURIComponent(offeringId))
+                    .then(function(res) {
+                        if (!res.ok) throw new Error('HTTP ' + res.status);
+                        return res.json();
+                    })
+                    .then(function(data) {
+                        groupSelect.innerHTML = '<option value="">---------</option>';
+                        var groups = (data && data.groups) ? data.groups : [];
+                        var hasMatch = false;
+
+                        groups.forEach(function(g) {
+                            var opt = document.createElement('option');
+                            opt.value = g.id;
+                            opt.textContent = g.name;
+                            if (targetVal && String(g.id) === String(targetVal)) {
+                                opt.selected = true;
+                                hasMatch = true;
+                            }
+                            groupSelect.appendChild(opt);
+                        });
+
+                        groupSelect.disabled = false;
+                        if (!hasMatch && targetVal) {
+                            groupSelect.value = '';
+                        }
+                    })
+                    .catch(function(err) {
+                        console.error('Failed to load groups for course offering:', err);
+                        groupSelect.innerHTML = '<option value="">Error loading groups</option>';
+                        groupSelect.disabled = true;
+                    });
+            }
+
+            // Initial load
+            if (courseSelect.value) {
+                loadGroupsForOffering(courseSelect.value, initialGroupVal);
+            } else {
+                groupSelect.disabled = true;
+                groupSelect.innerHTML = '<option value="">Select a course offering first...</option>';
+            }
+
+            // Trigger fetch when course offering changes
+            function onChange() {
+                var selectedOfferingId = courseSelect.value;
+                loadGroupsForOffering(selectedOfferingId, null);
+            }
+
+            courseSelect.addEventListener('change', onChange);
+            if ($) {
+                $(courseSelect).on('change select2:select select2:clear', onChange);
             }
         }
 
-        courseSelect.addEventListener('change', updateGroups);
-        updateGroups();
+        function filterAll() {
+            document.querySelectorAll('tr.form-row, div.inline-related, fieldset.module, form').forEach(setupRow);
+        }
+
+        filterAll();
+
+        // Support dynamically added inline rows
+        document.addEventListener('formset:added', function(event) {
+            setupRow(event.target);
+        });
+
+        if ($) {
+            $(document).on('formset:added', function(event, $row) {
+                if ($row && $row.length) {
+                    setupRow($row[0]);
+                }
+            });
+        }
     }
 
-    // Filter all existing schedule rows on page load
-    document.querySelectorAll('tr.form-row, div.inline-related, fieldset.module').forEach(filterGroupOptions);
-
-    // Filter newly added inline formset rows
-    document.addEventListener('formset:added', function(event) {
-        filterGroupOptions(event.target);
-    });
-});
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initGroupFiltering);
+    } else {
+        initGroupFiltering();
+    }
+})();

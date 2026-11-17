@@ -71,7 +71,7 @@ Alternatively, you can run a single command without entering the shell:
 ```bash
 docker exec -it attendance_web python manage.py createsuperuser
 ```
-
+ff
 
 
 i need to think about a backup stratigy this one is very important

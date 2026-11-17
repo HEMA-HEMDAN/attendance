@@ -1,0 +1,163 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<div style="max-width:1040px; margin:32px auto; background:#ffffff; border:1px solid #e2e8f0; border-radius:20px; padding:36px; box-shadow:0 6px 20px rgba(15,23,42,0.05); font-family:'Inter', -apple-system, sans-serif;">
+  
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:28px;">
+    <div>
+      <h2 style="font-size:24px; font-weight:800; color:#0f172a; margin:0 0 6px 0; letter-spacing:-0.5px;">
+        📋 Pre-flight Validation & Dry Run Summary
+      </h2>
+      <p style="color:#64748b; font-size:14px; margin:0;">
+        Review the records before committing to the database. No changes have been written yet.
+      </p>
+    </div>
+    <a href="../bulk-import/" style="color:#2563eb; text-decoration:none; font-size:14px; font-weight:700;">
+      ← Upload Another File
+    </a>
+  </div>
+
+  <!-- Metric Badges -->
+  <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px; margin-bottom:32px;">
+    <div style="background:#ecfdf5; border:1px solid #a7f3d0; padding:20px; border-radius:16px; text-align:center;">
+      <div style="font-size:36px; font-weight:900; color:#047857; line-height:1;">{{ valid_rows|length }}</div>
+      <div style="color:#047857; font-size:13px; font-weight:700; margin-top:6px;">New Students Ready</div>
+    </div>
+    <div style="background:#fef3c7; border:1px solid #fde68a; padding:20px; border-radius:16px; text-align:center;">
+      <div style="font-size:36px; font-weight:900; color:#b45309; line-height:1;">{{ existing_rows|length }}</div>
+      <div style="color:#b45309; font-size:13px; font-weight:700; margin-top:6px;">Existing (Re-enrolling)</div>
+    </div>
+    <div style="background:#fee2e2; border:1px solid #fca5a5; padding:20px; border-radius:16px; text-align:center;">
+      <div style="font-size:36px; font-weight:900; color:#b91c1c; line-height:1;">{{ invalid_rows|length }}</div>
+      <div style="color:#b91c1c; font-size:13px; font-weight:700; margin-top:6px;">Invalid Rows (Blocked)</div>
+    </div>
+    <div style="background:#eff6ff; border:1px solid #bfdbfe; padding:20px; border-radius:16px; text-align:center;">
+      <div style="font-size:36px; font-weight:900; color:#1d4ed8; line-height:1;">{{ selected_offerings|length }}</div>
+      <div style="color:#1d4ed8; font-size:13px; font-weight:700; margin-top:6px;">Target Course Offerings</div>
+    </div>
+  </div>
+
+  {% if selected_offerings %}
+  <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:14px; padding:16px 20px; margin-bottom:28px;">
+    <div style="font-size:12px; font-weight:800; color:#64748b; text-transform:uppercase; margin-bottom:8px;">Target Offerings Selected:</div>
+    <div style="display:flex; flex-wrap:wrap; gap:8px;">
+      {% for off in selected_offerings %}
+        <span style="background:#e0e7ff; color:#3730a3; padding:4px 10px; border-radius:8px; font-size:13px; font-weight:700;">
+          {{ off.course.code }} — {{ off.course.name }} ({{ off.semester.name }})
+        </span>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Invalid Rows Table -->
+  {% if invalid_rows %}
+  <div style="margin-bottom:32px;">
+    <h3 style="color:#b91c1c; font-size:16px; font-weight:800; margin-bottom:12px;">⚠️ Invalid Rows (Will be skipped)</h3>
+    <table style="width:100%; border-collapse:separate; border-spacing:0; border:1px solid #fecaca; border-radius:12px; overflow:hidden;">
+      <thead>
+        <tr style="background:#fee2e2;">
+          <th style="padding:10px 14px; text-align:left; font-size:11px; font-weight:700; color:#991b1b; text-transform:uppercase;">Row #</th>
+          <th style="padding:10px 14px; text-align:left; font-size:11px; font-weight:700; color:#991b1b; text-transform:uppercase;">Student ID</th>
+          <th style="padding:10px 14px; text-align:left; font-size:11px; font-weight:700; color:#991b1b; text-transform:uppercase;">Name</th>
+          <th style="padding:10px 14px; text-align:left; font-size:11px; font-weight:700; color:#991b1b; text-transform:uppercase;">Errors</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in invalid_rows %}
+        <tr style="background:#fff5f5;">
+          <td style="padding:10px 14px; border-bottom:1px solid #fee2e2; font-size:13px; font-weight:700;">{{ row.row_num }}</td>
+          <td style="padding:10px 14px; border-bottom:1px solid #fee2e2; font-size:13px; font-family:monospace;">{{ row.student_id|default:"—" }}</td>
+          <td style="padding:10px 14px; border-bottom:1px solid #fee2e2; font-size:13px;">{{ row.name|default:"—" }}</td>
+          <td style="padding:10px 14px; border-bottom:1px solid #fee2e2; color:#b91c1c; font-size:13px; font-weight:600;">{{ row.errors|join:", " }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <!-- Valid New Students Table -->
+  {% if valid_rows %}
+  <div style="margin-bottom:32px;">
+    <h3 style="color:#047857; font-size:16px; font-weight:800; margin-bottom:12px;">✅ New Students to Provision (Sample 20 shown)</h3>
+    <table style="width:100%; border-collapse:separate; border-spacing:0; border:1px solid #e2e8f0; border-radius:12px; overflow:hidden;">
+      <thead>
+        <tr style="background:#f8fafc;">
+          <th style="padding:10px 14px; text-align:left; font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase;">Student ID</th>
+          <th style="padding:10px 14px; text-align:left; font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase;">Full Name</th>
+          <th style="padding:10px 14px; text-align:left; font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase;">Department</th>
+          <th style="padding:10px 14px; text-align:left; font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase;">Level</th>
+          <th style="padding:10px 14px; text-align:left; font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase;">Section</th>
+          <th style="padding:10px 14px; text-align:left; font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase;">Generated Email</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in valid_rows|slice:":20" %}
+        <tr>
+          <td style="padding:10px 14px; border-bottom:1px solid #e2e8f0; font-size:13px; font-weight:700; color:#0f172a;">{{ row.student_id }}</td>
+          <td style="padding:10px 14px; border-bottom:1px solid #e2e8f0; font-size:13px;">{{ row.name }}</td>
+          <td style="padding:10px 14px; border-bottom:1px solid #e2e8f0; font-size:13px; color:#475569;">{{ row.department }}</td>
+          <td style="padding:10px 14px; border-bottom:1px solid #e2e8f0; font-size:13px; color:#475569;">{{ row.academic_level }}</td>
+          <td style="padding:10px 14px; border-bottom:1px solid #e2e8f0; font-size:13px; color:#2563eb; font-weight:700;">{{ row.section|default:"—" }}</td>
+          <td style="padding:10px 14px; border-bottom:1px solid #e2e8f0; font-size:12px; color:#64748b; font-family:monospace;">{{ row.email }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if valid_rows|length > 20 %}
+      <p style="font-size:12px; color:#64748b; margin-top:8px; font-style:italic;">...and {{ valid_rows|length|add:"-20" }} more new students.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Existing Students Table -->
+  {% if existing_rows %}
+  <div style="margin-bottom:32px;">
+    <h3 style="color:#b45309; font-size:16px; font-weight:800; margin-bottom:12px;">🟡 Existing Students (Will update & append enrollments)</h3>
+    <table style="width:100%; border-collapse:separate; border-spacing:0; border:1px solid #fde68a; border-radius:12px; overflow:hidden;">
+      <thead>
+        <tr style="background:#fef3c7;">
+          <th style="padding:10px 14px; text-align:left; font-size:11px; font-weight:700; color:#92400e; text-transform:uppercase;">Student ID</th>
+          <th style="padding:10px 14px; text-align:left; font-size:11px; font-weight:700; color:#92400e; text-transform:uppercase;">Name</th>
+          <th style="padding:10px 14px; text-align:left; font-size:11px; font-weight:700; color:#92400e; text-transform:uppercase;">Section</th>
+          <th style="padding:10px 14px; text-align:left; font-size:11px; font-weight:700; color:#92400e; text-transform:uppercase;">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in existing_rows|slice:":10" %}
+        <tr>
+          <td style="padding:10px 14px; border-bottom:1px solid #fde68a; font-size:13px; font-weight:700;">{{ row.student_id }}</td>
+          <td style="padding:10px 14px; border-bottom:1px solid #fde68a; font-size:13px;">{{ row.name }}</td>
+          <td style="padding:10px 14px; border-bottom:1px solid #fde68a; font-size:13px; font-weight:700; color:#2563eb;">{{ row.section|default:"—" }}</td>
+          <td style="padding:10px 14px; border-bottom:1px solid #fde68a; font-size:12px; color:#92400e; font-weight:600;">Retain user, update profile & enroll in selected offerings</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <!-- Confirmation Action -->
+  <form method="post" action="../bulk-import/confirm/" style="display:flex; align-items:center; gap:16px; margin-top:36px; padding-top:24px; border-top:1px solid #f1f5f9;">
+    {% csrf_token %}
+    <input type="hidden" name="staging_token" value="{{ staging_token }}">
+    
+    {% if valid_rows or existing_rows %}
+      <button type="submit"
+              style="background:#059669; color:white; padding:14px 28px; border:none; border-radius:12px; cursor:pointer; font-size:15px; font-weight:700; font-family:'Inter', sans-serif; box-shadow:0 4px 14px rgba(5, 150, 105, 0.3);">
+        ✅ Confirm & Execute Import ({{ valid_rows|length|add:existing_rows|length }} students)
+      </button>
+    {% endif %}
+
+    <a href="../bulk-import/" style="color:#2563eb; text-decoration:none; font-size:14px; font-weight:700; padding:12px 18px;">
+      ← Upload a Different File
+    </a>
+    <a href=".." style="color:#64748b; text-decoration:none; font-size:14px; font-weight:600;">
+      Cancel
+    </a>
+  </form>
+
+</div>
+{% endblock %}

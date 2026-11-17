@@ -1,0 +1,38 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<div style="max-width:640px; margin:32px auto; background:#ffffff; border:1px solid #e2e8f0; border-radius:18px; padding:32px; box-shadow:0 4px 14px rgba(15,23,42,0.04); font-family:'Inter', sans-serif;">
+  <h2 style="font-size:22px; font-weight:800; color:#0f172a; margin-bottom:8px; letter-spacing:-0.4px;">📥 Import Students from CSV</h2>
+  <p style="color:#64748b; font-size:14px; margin-bottom:16px;">Upload a CSV file containing student records with the required columns:</p>
+  
+  <div style="background:#f1f5f9; padding:12px 16px; border-radius:10px; border:1px solid #e2e8f0; font-family:monospace; font-size:13px; color:#4f46e5; margin-bottom:16px;">
+    student_id, first_name, last_name, email, group
+  </div>
+
+  <p style="color:#64748b; font-size:13px; margin-bottom:20px;">The <em>group</em> column is optional. Group names must match existing groups exactly.</p>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div style="background:{% if message.tags == 'error' %}#fee2e2{% else %}#ecfdf5{% endif %}; color:{% if message.tags == 'error' %}#b91c1c{% else %}#047857{% endif %}; padding:12px 16px; border-radius:10px; margin-bottom:20px; font-size:14px; font-weight:600;">
+        {{ message }}
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <div style="margin-bottom:20px;">
+      <label for="file" style="display:block; margin-bottom:8px; font-size:13px; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:0.5px;">Select CSV file:</label>
+      <input type="file" name="file" id="file" accept=".csv" required
+             style="display:block; padding:10px 14px; background:#f1f5f9; border:1px solid #e2e8f0; border-radius:10px; width:100%; font-size:14px; font-family:'Inter', sans-serif;">
+    </div>
+    <div style="display:flex; align-items:center; gap:12px; margin-top:24px;">
+      <button type="submit"
+              style="background:#4f46e5; color:white; padding:12px 24px; border:none; border-radius:10px; cursor:pointer; font-size:14px; font-weight:700; font-family:'Inter', sans-serif; box-shadow:0 4px 12px rgba(79, 70, 229, 0.25);">
+        📋 Preview Import
+      </button>
+      <a href=".." style="color:#64748b; text-decoration:none; font-size:14px; font-weight:600;">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
+

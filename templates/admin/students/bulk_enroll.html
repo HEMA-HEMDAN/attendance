@@ -1,0 +1,174 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+  &rsaquo; <a href="{% url opts|admin_urlname:'changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+  &rsaquo; {% translate 'Bulk Course Enrollment' %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div style="max-width: 980px; margin: 20px auto; padding: 24px; background: var(--darkened-bg, #f8fafc); border: 1px solid var(--border-color, #cbd5e1); border-radius: 12px; color: var(--body-fg, #1e293b);">
+
+  <div style="margin-bottom: 24px; border-bottom: 1px solid var(--border-color, #cbd5e1); padding-bottom: 16px;">
+    <h2 style="margin: 0 0 8px 0; font-size: 22px; font-weight: 700; color: var(--body-fg, #0f172a);">
+      ⚡ {% translate "Bulk Course & Section Enrollment" %}
+    </h2>
+    <p style="margin: 0; color: var(--body-quiet-color, #64748b); font-size: 14px;">
+      {% blocktranslate count counter=students|length %}
+      Select courses and assign sections for <strong>{{ counter }}</strong> selected student.
+      {% plural %}
+      Select courses and assign sections for <strong>{{ counter }}</strong> selected students.
+      {% endblocktranslate %}
+    </p>
+  </div>
+
+  <!-- Selected Students Summary Card -->
+  <div style="margin-bottom: 24px; background: var(--body-bg, #ffffff); border: 1px solid var(--border-color, #cbd5e1); border-radius: 8px; padding: 16px;">
+    <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; color: var(--body-quiet-color, #64748b);">
+      {% translate "Selected Students" %} ({{ students|length }}):
+    </div>
+    <div style="display: flex; flex-wrap: wrap; gap: 8px; max-height: 110px; overflow-y: auto;">
+      {% for s in students|slice:":40" %}
+        <span style="background: var(--darkened-bg, #f1f5f9); color: var(--body-fg, #1e293b); border: 1px solid var(--border-color, #e2e8f0); padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600;">
+          {{ s.student_id }} &mdash; {{ s.user.get_full_name }}
+        </span>
+      {% endfor %}
+      {% if students|length > 40 %}
+        <span style="color: var(--body-quiet-color, #64748b); font-size: 12px; font-weight: 600; padding: 4px;">
+          + {{ students|length|add:"-40" }} {% translate "more" %}
+        </span>
+      {% endif %}
+    </div>
+  </div>
+
+  <form method="post" id="bulk-enroll-form">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="bulk_enroll_students">
+    {% for s in students %}
+      <input type="hidden" name="_selected_action" value="{{ s.pk }}">
+    {% endfor %}
+
+    <!-- Step 1 & 2: Course Offerings with Per-Offering Section Selector -->
+    <div style="margin-bottom: 24px;">
+      <h3 style="font-size: 16px; font-weight: 700; margin: 0 0 12px 0; color: var(--body-fg, #0f172a);">
+        {% translate "1. Select Courses & Sections" %}
+      </h3>
+      <p style="margin: 0 0 14px 0; font-size: 13px; color: var(--body-quiet-color, #64748b);">
+        {% translate "Check each course offering to enroll students in, and pick the designated section or lecture-only." %}
+      </p>
+
+      <div style="overflow-x: auto; border: 1px solid var(--border-color, #cbd5e1); border-radius: 8px; background: var(--body-bg, #ffffff);">
+        <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px;">
+          <thead>
+            <tr style="background: var(--darkened-bg, #f1f5f9); border-bottom: 1px solid var(--border-color, #cbd5e1); color: var(--body-fg, #334155);">
+              <th style="padding: 10px 14px; width: 44px; text-align: center;">
+                <input type="checkbox" id="select-all-offerings" title="{% translate 'Select/Deselect all' %}">
+              </th>
+              <th style="padding: 10px 14px; font-weight: 700;">{% translate "Course" %}</th>
+              <th style="padding: 10px 14px; font-weight: 700;">{% translate "Academic Term" %}</th>
+              <th style="padding: 10px 14px; font-weight: 700; min-width: 260px;">{% translate "Section / Group Assignment" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for off in offerings %}
+              <tr style="border-bottom: 1px solid var(--border-color, #f1f5f9);" class="offering-row">
+                <td style="padding: 12px 14px; text-align: center; vertical-align: middle;">
+                  <input type="checkbox"
+                         name="course_offerings"
+                         value="{{ off.id }}"
+                         id="offering_chk_{{ off.id }}"
+                         class="offering-checkbox"
+                         {% if off.id in preselected_offering_ids %}checked{% endif %}>
+                </td>
+                <td style="padding: 12px 14px; vertical-align: middle;">
+                  <label for="offering_chk_{{ off.id }}" style="font-weight: 600; cursor: pointer; color: var(--body-fg, #0f172a); display: block;">
+                    {{ off.course.code }} &mdash; {{ off.course.name }}
+                  </label>
+                  {% if off.course.department %}
+                    <span style="font-size: 11px; color: var(--body-quiet-color, #64748b);">Dept: {{ off.course.department }}</span>
+                  {% endif %}
+                </td>
+                <td style="padding: 12px 14px; vertical-align: middle; color: var(--body-quiet-color, #475569);">
+                  {{ off.academic_year.name }} &bull; {{ off.semester.name }}
+                </td>
+                <td style="padding: 12px 14px; vertical-align: middle;">
+                  <select name="group_for_{{ off.id }}"
+                          id="group_select_{{ off.id }}"
+                          class="group-select"
+                          style="width: 100%; max-width: 320px; padding: 6px 10px; border: 1px solid var(--border-color, #cbd5e1); border-radius: 6px; background: var(--body-bg, #ffffff); color: var(--body-fg, #1e293b); font-size: 13px;">
+                    <option value="">{% translate "&mdash; Lecture only (No section) &mdash;" %}</option>
+                    {% for g in off.groups.all %}
+                      {% if g.status == 'ACTIVE' %}
+                        <option value="{{ g.id }}" {% if off.selected_group_id == g.id %}selected{% endif %}>
+                          {{ g.name }}
+                        </option>
+                      {% endif %}
+                    {% endfor %}
+                  </select>
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="4" style="padding: 24px; text-align: center; color: var(--body-quiet-color, #64748b);">
+                  {% translate "No active course offerings found for this organization." %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Actions Bar -->
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-top: 28px;">
+      <a href="{% url opts|admin_urlname:'changelist' %}" class="button" style="background: var(--darkened-bg, #f1f5f9); color: var(--body-fg, #334155); border: 1px solid var(--border-color, #cbd5e1); padding: 10px 18px; border-radius: 6px; text-decoration: none; font-weight: 600;">
+        &larr; {% translate "Cancel and Return" %}
+      </a>
+
+      <button type="submit" name="action_step" value="preview" class="button default" style="padding: 10px 24px; font-weight: 700; font-size: 14px;">
+        {% translate "Preview Enrollment Plan &rarr;" %}
+      </button>
+    </div>
+  </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const selectAll = document.getElementById('select-all-offerings');
+  const checkboxes = document.querySelectorAll('.offering-checkbox');
+
+  function updateSelectState(checkbox) {
+    const select = document.getElementById('group_select_' + checkbox.value);
+    if (!select) return;
+    if (checkbox.checked) {
+      select.disabled = false;
+      select.style.opacity = '1';
+    } else {
+      select.disabled = true;
+      select.style.opacity = '0.5';
+    }
+  }
+
+  checkboxes.forEach(function(cb) {
+    updateSelectState(cb);
+    cb.addEventListener('change', function() {
+      updateSelectState(this);
+    });
+  });
+
+  if (selectAll) {
+    selectAll.addEventListener('change', function() {
+      const isChecked = this.checked;
+      checkboxes.forEach(function(cb) {
+        cb.checked = isChecked;
+        updateSelectState(cb);
+      });
+    });
+  }
+});
+</script>
+{% endblock %}

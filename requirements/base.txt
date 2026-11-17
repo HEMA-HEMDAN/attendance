@@ -1,0 +1,16 @@
+Django==5.2.18
+djangorestframework==3.15.2
+djangorestframework-simplejwt==5.3.1
+django-cors-headers==4.4.0
+django-environ==0.11.2
+channels==4.1.0
+channels-redis==4.2.0
+psycopg2-binary==2.9.9
+Pillow==10.4.0
+cryptography==43.0.3
+daphne==4.1.2
+openpyxl==3.1.5
+django-import-export==4.4.2
+tablib==3.10.0
+diff-match-patch==20241021
+

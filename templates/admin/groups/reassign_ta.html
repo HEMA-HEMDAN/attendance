@@ -1,0 +1,124 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+  &rsaquo; <a href="{% url opts|admin_urlname:'changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+  &rsaquo; {% translate 'Assign Groups to Teaching Assistant' %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div style="max-width: 980px; margin: 20px auto; padding: 24px; background: var(--darkened-bg, #f8fafc); border: 1px solid var(--border-color, #cbd5e1); border-radius: 12px; color: var(--body-fg, #1e293b);">
+
+  <div style="margin-bottom: 24px; border-bottom: 1px solid var(--border-color, #cbd5e1); padding-bottom: 16px;">
+    <h2 style="margin: 0 0 8px 0; font-size: 22px; font-weight: 700; color: var(--body-fg, #0f172a);">
+      ⚡ {% translate "Assign Selected Groups to Teaching Assistant" %}
+    </h2>
+    <p style="margin: 0; color: var(--body-quiet-color, #64748b); font-size: 14px;">
+      {% translate "Select the target teaching assistant to instruct the selected groups. Any existing TA assignments will be transferred upon confirmation." %}
+    </p>
+  </div>
+
+  <form action="" method="post">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="reassign_ta">
+    {% for group in groups %}
+      <input type="hidden" name="{{ action_checkbox_name }}" value="{{ group.pk }}">
+    {% endfor %}
+
+    <!-- Target TA Selector Card -->
+    <div style="margin-bottom: 24px; background: var(--body-bg, #ffffff); border: 1px solid var(--border-color, #cbd5e1); border-radius: 8px; padding: 18px;">
+      <label for="new_ta" style="display: block; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; color: var(--body-quiet-color, #64748b);">
+        {% translate "Target Teaching Assistant" %}:
+      </label>
+      <select name="new_ta" id="new_ta" required style="width: 100%; max-width: 450px; padding: 10px 14px; border: 1px solid var(--border-color, #cbd5e1); border-radius: 6px; background: var(--body-bg, #ffffff); color: var(--body-fg, #1e293b); font-size: 14px; font-weight: 600;">
+        <option value="">-- {% translate "Select Teaching Assistant" %} --</option>
+        {% for ta in tas %}
+          <option value="{{ ta.pk }}" {% if selected_ta_id == ta.pk %}selected{% endif %}>
+            TA {{ ta.user.get_full_name }} ({{ ta.user.email }}{% if ta.department %} &bull; {{ ta.department }}{% endif %})
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- Selected Groups Table -->
+    <div style="background: var(--body-bg, #ffffff); border: 1px solid var(--border-color, #cbd5e1); border-radius: 8px; overflow: hidden; margin-bottom: 24px;">
+      <div style="padding: 14px 18px; border-bottom: 1px solid var(--border-color, #cbd5e1); background: var(--darkened-bg, #f8fafc); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+        <span style="font-weight: 700; font-size: 14px; color: var(--body-fg, #0f172a);">
+          {% translate "Selected Groups" %} ({{ groups|length }})
+        </span>
+        <input type="text" id="reassign-group-search" placeholder="{% translate 'Filter selected groups...' %}" style="padding: 6px 12px; border: 1px solid var(--border-color, #cbd5e1); border-radius: 6px; font-size: 12px; width: 220px; background: var(--body-bg, #ffffff); color: var(--body-fg, #1e293b);">
+      </div>
+
+      <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px; text-align: left;" id="reassign-groups-table">
+          <thead>
+            <tr style="background: var(--darkened-bg, #f1f5f9); border-bottom: 1px solid var(--border-color, #e2e8f0); color: var(--body-quiet-color, #475569);">
+              <th style="padding: 10px 14px; font-weight: 700;">{% translate "Group / Section" %}</th>
+              <th style="padding: 10px 14px; font-weight: 700;">{% translate "Course Offering" %}</th>
+              <th style="padding: 10px 14px; font-weight: 700;">{% translate "Current TA" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for g in groups %}
+              <tr style="border-bottom: 1px solid var(--border-color, #f1f5f9);" class="reassign-group-row" data-search-text="{{ g.name }} {{ g.course_offering.course.code }} {{ g.course_offering.course.name }}">
+                <td style="padding: 12px 14px; vertical-align: middle; font-weight: 600; color: var(--body-fg, #0f172a);">
+                  🏷️ {{ g.name }}
+                </td>
+                <td style="padding: 12px 14px; vertical-align: middle;">
+                  {{ g.course_offering.course.code }} &mdash; {{ g.course_offering.course.name }}
+                  <span style="color: var(--body-quiet-color, #64748b); font-size: 12px; margin-left: 6px;">
+                    ({{ g.course_offering.academic_year.name }} &bull; {{ g.course_offering.semester.name }})
+                  </span>
+                </td>
+                <td style="padding: 12px 14px; vertical-align: middle;">
+                  {% if g.teaching_assistant %}
+                    <span style="background: var(--darkened-bg, #fffbeb); color: #92400e; border: 1px solid #fef3c7; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">
+                      ⚠️ TA {{ g.teaching_assistant.user.get_full_name }}
+                    </span>
+                  {% else %}
+                    <span style="color: var(--body-quiet-color, #64748b); font-style: italic; font-size: 12px;">
+                      {% translate "Unassigned" %}
+                    </span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+      <a href="{% url opts|admin_urlname:'changelist' %}" class="button" style="background: var(--darkened-bg, #f1f5f9); color: var(--body-fg, #334155); border: 1px solid var(--border-color, #cbd5e1); padding: 10px 18px; border-radius: 6px; font-weight: 600; text-decoration: none;">
+        &larr; {% translate "Cancel & Return" %}
+      </a>
+
+      <button type="submit" name="action_step" value="preview" class="button default" style="padding: 12px 24px; font-weight: 700; font-size: 14px;">
+        🔍 {% translate "Preview Assignments & Reassignments" %} &rarr;
+      </button>
+    </div>
+  </form>
+
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var searchInput = document.getElementById('reassign-group-search');
+    var rows = document.querySelectorAll('.reassign-group-row');
+    if (searchInput && rows.length > 0) {
+      searchInput.addEventListener('input', function () {
+        var q = this.value.trim().toLowerCase();
+        rows.forEach(function (r) {
+          var text = (r.getAttribute('data-search-text') || '').toLowerCase();
+          r.style.display = (!q || text.indexOf(q) !== -1) ? '' : 'none';
+        });
+      });
+    }
+  });
+</script>
+{% endblock %}

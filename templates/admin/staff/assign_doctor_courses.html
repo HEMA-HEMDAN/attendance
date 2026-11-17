@@ -1,0 +1,152 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+  &rsaquo; <a href="{% url opts|admin_urlname:'changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+  &rsaquo; {% translate 'Assign Courses to Doctor' %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div style="max-width: 980px; margin: 20px auto; padding: 24px; background: var(--darkened-bg, #f8fafc); border: 1px solid var(--border-color, #cbd5e1); border-radius: 12px; color: var(--body-fg, #1e293b);">
+
+  <div style="margin-bottom: 24px; border-bottom: 1px solid var(--border-color, #cbd5e1); padding-bottom: 16px;">
+    <h2 style="margin: 0 0 8px 0; font-size: 22px; font-weight: 700; color: var(--body-fg, #0f172a);">
+      👨‍🏫 {% translate "Assign Course Offerings to Doctor" %}
+    </h2>
+    <p style="margin: 0; color: var(--body-quiet-color, #64748b); font-size: 14px;">
+      {% translate "Select the course offerings that this doctor will lead. Any offerings currently assigned to another doctor will be transferred upon confirmation." %}
+    </p>
+  </div>
+
+  <!-- Selected Doctor Profile Card -->
+  <div style="margin-bottom: 24px; background: var(--body-bg, #ffffff); border: 1px solid var(--border-color, #cbd5e1); border-radius: 8px; padding: 16px;">
+    <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; color: var(--body-quiet-color, #64748b);">
+      {% translate "Target Doctor" %}:
+    </div>
+    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+      <span style="font-size: 16px; font-weight: 700; color: var(--body-fg, #0f172a);">
+        {{ doctor.title }} {{ doctor.user.get_full_name }}
+      </span>
+      <span style="background: var(--darkened-bg, #f1f5f9); color: var(--body-quiet-color, #475569); border: 1px solid var(--border-color, #e2e8f0); padding: 3px 8px; border-radius: 4px; font-size: 12px;">
+        ✉️ {{ doctor.user.email }}
+      </span>
+      {% if doctor.department %}
+        <span style="background: var(--darkened-bg, #f1f5f9); color: var(--body-quiet-color, #475569); border: 1px solid var(--border-color, #e2e8f0); padding: 3px 8px; border-radius: 4px; font-size: 12px;">
+          🏢 {{ doctor.department }}
+        </span>
+      {% endif %}
+    </div>
+  </div>
+
+  <form method="post" id="assign-doctor-form">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="assign_courses_to_doctor">
+    <input type="hidden" name="_selected_action" value="{{ doctor.pk }}">
+
+    <!-- Available Offerings Table -->
+    <div style="background: var(--body-bg, #ffffff); border: 1px solid var(--border-color, #cbd5e1); border-radius: 8px; overflow: hidden; margin-bottom: 24px;">
+      <div style="padding: 14px 18px; border-bottom: 1px solid var(--border-color, #cbd5e1); background: var(--darkened-bg, #f8fafc); display: flex; align-items: center; justify-content: space-between;">
+        <span style="font-weight: 700; font-size: 14px; color: var(--body-fg, #0f172a);">
+          {% translate "Available Active Course Offerings" %} ({{ offerings|length }})
+        </span>
+        <label style="font-size: 13px; font-weight: 600; cursor: pointer; color: var(--body-fg, #334155); display: flex; align-items: center; gap: 6px;">
+          <input type="checkbox" id="select-all-offerings">
+          {% translate "Select All" %}
+        </label>
+      </div>
+
+      <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px; text-align: left;">
+          <thead>
+            <tr style="background: var(--darkened-bg, #f1f5f9); border-bottom: 1px solid var(--border-color, #e2e8f0); color: var(--body-quiet-color, #475569);">
+              <th style="width: 44px; padding: 10px 14px; text-align: center;">#</th>
+              <th style="padding: 10px 14px; font-weight: 700;">{% translate "Course" %}</th>
+              <th style="padding: 10px 14px; font-weight: 700;">{% translate "Academic Term" %}</th>
+              <th style="padding: 10px 14px; font-weight: 700;">{% translate "Current Doctor" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for off in offerings %}
+              <tr style="border-bottom: 1px solid var(--border-color, #f1f5f9);" class="offering-row">
+                <td style="padding: 12px 14px; text-align: center; vertical-align: middle;">
+                  <input type="checkbox"
+                         name="course_offerings"
+                         value="{{ off.id }}"
+                         id="offering_chk_{{ off.id }}"
+                         class="offering-checkbox"
+                         {% if off.id in preselected_offering_ids or off.doctor_id == doctor.id %}checked{% endif %}>
+                </td>
+                <td style="padding: 12px 14px; vertical-align: middle;">
+                  <label for="offering_chk_{{ off.id }}" style="font-weight: 600; cursor: pointer; color: var(--body-fg, #0f172a); display: block;">
+                    {{ off.course.code }} &mdash; {{ off.course.name }}
+                  </label>
+                  {% if off.course.department %}
+                    <span style="font-size: 11px; color: var(--body-quiet-color, #64748b);">Dept: {{ off.course.department }}</span>
+                  {% endif %}
+                </td>
+                <td style="padding: 12px 14px; vertical-align: middle; color: var(--body-quiet-color, #475569);">
+                  {{ off.academic_year.name }} &bull; {{ off.semester.name }}
+                </td>
+                <td style="padding: 12px 14px; vertical-align: middle;">
+                  {% if off.doctor %}
+                    {% if off.doctor_id == doctor.id %}
+                      <span style="background: var(--darkened-bg, #f0fdf4); color: #166534; border: 1px solid #bbf7d0; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">
+                        ✓ {% translate "Already assigned to this doctor" %}
+                      </span>
+                    {% else %}
+                      <span style="background: var(--darkened-bg, #fffbeb); color: #92400e; border: 1px solid #fef3c7; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">
+                        ⚠️ {{ off.doctor.title }} {{ off.doctor.user.get_full_name }} ({% translate "will be replaced" %})
+                      </span>
+                    {% endif %}
+                  {% else %}
+                    <span style="color: var(--body-quiet-color, #64748b); font-style: italic; font-size: 12px;">
+                      {% translate "Unassigned" %}
+                    </span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="4" style="padding: 24px; text-align: center; color: var(--body-quiet-color, #64748b);">
+                  {% translate "No active course offerings found for this organization." %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+      <a href="{% url opts|admin_urlname:'changelist' %}" class="button" style="background: var(--darkened-bg, #f1f5f9); color: var(--body-fg, #334155); border: 1px solid var(--border-color, #cbd5e1); padding: 10px 18px; border-radius: 6px; font-weight: 600; text-decoration: none;">
+        &larr; {% translate "Cancel & Return" %}
+      </a>
+
+      <button type="submit" name="action_step" value="preview" class="button default" style="padding: 12px 24px; font-weight: 700; font-size: 14px;">
+        🔍 {% translate "Preview Assignments & Reassignments" %} &rarr;
+      </button>
+    </div>
+  </form>
+
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const selectAll = document.getElementById('select-all-offerings');
+    const checkboxes = document.querySelectorAll('.offering-checkbox');
+
+    if (selectAll) {
+      selectAll.addEventListener('change', function () {
+        checkboxes.forEach(cb => {
+          cb.checked = selectAll.checked;
+        });
+      });
+    }
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: attendance_web
+    restart: always
+    network_mode: "host"
+    env_file:
+      - .env
+    environment:
+      # Connect directly to the host's native databases via localhost
+      - DB_HOST=127.0.0.1
+      - REDIS_URL=redis://127.0.0.1:6379/0
+    volumes:
+      - static_volume:/server/staticfiles
+      - media_volume:/server/media
+
+volumes:
+  static_volume:
+  media_volume:

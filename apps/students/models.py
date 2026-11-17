@@ -1,0 +1,105 @@
+"""
+Students app.
+
+Students are provisioned by organization admins — they do NOT self-register.
+Each student is linked to a User account (for login) and has an organization-scoped
+student_id (external ID from the institution).
+"""
+
+from django.db import models
+
+
+class StudentStatus(models.TextChoices):
+    ACTIVE = 'ACTIVE', 'Active'
+    SUSPENDED = 'SUSPENDED', 'Suspended'
+    ARCHIVED = 'ARCHIVED', 'Archived'
+
+
+class Student(models.Model):
+    user = models.OneToOneField(
+        'accounts.User',
+        on_delete=models.PROTECT,
+        related_name='student_profile',
+    )
+    organization = models.ForeignKey(
+        'organizations.Organization',
+        on_delete=models.CASCADE,
+        related_name='students',
+    )
+    student_id = models.CharField(
+        max_length=100,
+        help_text='Organization-scoped external student identifier',
+    )
+
+    phone = models.CharField(max_length=30, blank=True)
+    personal_email = models.EmailField(blank=True, null=True, help_text='Fallback email')
+    department = models.CharField(max_length=100, blank=True)
+    academic_level = models.CharField(max_length=50, blank=True, help_text='e.g. 1st Year')
+    status = models.CharField(
+        max_length=20,
+        choices=StudentStatus.choices,
+        default=StudentStatus.ACTIVE,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'students'
+        unique_together = [('organization', 'student_id')]
+        indexes = [
+            models.Index(fields=['organization', 'status']),
+        ]
+
+    def __str__(self):
+        return f'{self.student_id} — {self.user.get_full_name()}'
+
+
+class StudentEnrollment(models.Model):
+    student = models.ForeignKey(
+        Student,
+        on_delete=models.CASCADE,
+        related_name='enrollments',
+    )
+    course_offering = models.ForeignKey(
+        'courses.CourseOffering',
+        on_delete=models.CASCADE,
+        related_name='enrollments',
+    )
+    group = models.ForeignKey(
+        'groups.Group',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='enrollments',
+        help_text='The lab/group section for this course offering',
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'student_enrollments'
+        unique_together = [('student', 'course_offering')]
+        indexes = [
+            models.Index(fields=['student', 'course_offering']),
+            models.Index(fields=['group']),
+        ]
+
+    def clean(self):
+        super().clean()
+        from django.core.exceptions import ValidationError
+        errors = {}
+        if self.group and self.course_offering:
+            if self.group.course_offering_id != self.course_offering_id:
+                errors['group'] = f"Group '{self.group.name}' does not belong to course offering '{self.course_offering}'."
+        if hasattr(self, 'student') and self.student and hasattr(self, 'course_offering') and self.course_offering:
+            if self.student.organization_id != self.course_offering.course.organization_id:
+                errors['course_offering'] = "Student and course offering must belong to the same organization."
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'{self.student.student_id} enrolled in {self.course_offering.course.code}'

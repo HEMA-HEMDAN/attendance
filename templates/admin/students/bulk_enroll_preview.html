@@ -1,0 +1,145 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+  &rsaquo; <a href="{% url opts|admin_urlname:'changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+  &rsaquo; {% translate 'Preview Bulk Enrollment' %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div style="max-width: 980px; margin: 20px auto; padding: 24px; background: var(--darkened-bg, #f8fafc); border: 1px solid var(--border-color, #cbd5e1); border-radius: 12px; color: var(--body-fg, #1e293b);">
+
+  <div style="margin-bottom: 24px; border-bottom: 1px solid var(--border-color, #cbd5e1); padding-bottom: 16px;">
+    <h2 style="margin: 0 0 8px 0; font-size: 22px; font-weight: 700; color: var(--body-fg, #0f172a);">
+      🔍 {% translate "Review Proposed Enrollment Plan" %}
+    </h2>
+    <p style="margin: 0; color: var(--body-quiet-color, #64748b); font-size: 14px;">
+      {% translate "This is a dry-run preview. No changes have been saved to the database yet. Verify the metrics below before confirming." %}
+    </p>
+  </div>
+
+  <!-- Metric Badges -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 28px;">
+    
+    <div style="background: var(--body-bg, #ffffff); border: 1px solid var(--border-color, #cbd5e1); border-radius: 8px; padding: 16px; text-align: center;">
+      <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--body-quiet-color, #64748b); margin-bottom: 6px;">
+        {% translate "Target Students" %}
+      </div>
+      <div style="font-size: 26px; font-weight: 800; color: var(--body-fg, #0f172a);">
+        {{ preview_result.total_students }}
+      </div>
+    </div>
+
+    <div style="background: var(--body-bg, #ffffff); border: 1px solid #10b981; border-radius: 8px; padding: 16px; text-align: center;">
+      <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #10b981; margin-bottom: 6px;">
+        {% translate "New Enrollments" %}
+      </div>
+      <div style="font-size: 26px; font-weight: 800; color: #10b981;">
+        +{{ preview_result.created_count }}
+      </div>
+      <div style="font-size: 11px; color: var(--body-quiet-color, #64748b); margin-top: 4px;">
+        {% translate "Will be created" %}
+      </div>
+    </div>
+
+    <div style="background: var(--body-bg, #ffffff); border: 1px solid #3b82f6; border-radius: 8px; padding: 16px; text-align: center;">
+      <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #3b82f6; margin-bottom: 6px;">
+        {% translate "Already Enrolled" %}
+      </div>
+      <div style="font-size: 26px; font-weight: 800; color: #3b82f6;">
+        {{ preview_result.already_existing_count }}
+      </div>
+      <div style="font-size: 11px; color: var(--body-quiet-color, #64748b); margin-top: 4px;">
+        {% translate "Preserved unchanged" %}
+      </div>
+    </div>
+
+    {% if preview_result.rejected_count > 0 %}
+    <div style="background: var(--body-bg, #ffffff); border: 1px solid #ef4444; border-radius: 8px; padding: 16px; text-align: center;">
+      <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #ef4444; margin-bottom: 6px;">
+        {% translate "Rejected / Invalid" %}
+      </div>
+      <div style="font-size: 26px; font-weight: 800; color: #ef4444;">
+        {{ preview_result.rejected_count }}
+      </div>
+      <div style="font-size: 11px; color: #ef4444; margin-top: 4px;">
+        {% translate "Excluded from execution" %}
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+
+  <!-- Selected Courses & Sections Table -->
+  <div style="margin-bottom: 24px;">
+    <h3 style="font-size: 16px; font-weight: 700; margin: 0 0 12px 0; color: var(--body-fg, #0f172a);">
+      {% translate "Selected Courses and Assigned Sections" %}
+    </h3>
+
+    <div style="overflow-x: auto; border: 1px solid var(--border-color, #cbd5e1); border-radius: 8px; background: var(--body-bg, #ffffff);">
+      <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px;">
+        <thead>
+          <tr style="background: var(--darkened-bg, #f1f5f9); border-bottom: 1px solid var(--border-color, #cbd5e1); color: var(--body-fg, #334155);">
+            <th style="padding: 10px 14px; font-weight: 700;">{% translate "Course" %}</th>
+            <th style="padding: 10px 14px; font-weight: 700;">{% translate "Academic Term" %}</th>
+            <th style="padding: 10px 14px; font-weight: 700;">{% translate "Assigned Section / Group" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in preview_offerings %}
+            <tr style="border-bottom: 1px solid var(--border-color, #f1f5f9);">
+              <td style="padding: 12px 14px; vertical-align: middle; font-weight: 600;">
+                {{ item.offering.course.code }} &mdash; {{ item.offering.course.name }}
+              </td>
+              <td style="padding: 12px 14px; vertical-align: middle; color: var(--body-quiet-color, #475569);">
+                {{ item.offering.academic_year.name }} &bull; {{ item.offering.semester.name }}
+              </td>
+              <td style="padding: 12px 14px; vertical-align: middle;">
+                {% if item.group %}
+                  <span style="background: var(--darkened-bg, #f1f5f9); color: var(--body-fg, #0f172a); border: 1px solid var(--border-color, #cbd5e1); padding: 4px 10px; border-radius: 6px; font-weight: 600;">
+                    🏷️ {{ item.group.name }}
+                  </span>
+                {% else %}
+                  <span style="color: var(--body-quiet-color, #64748b); font-style: italic;">
+                    📚 {% translate "Lecture only (No section)" %}
+                  </span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Form with Confirmation Actions -->
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="bulk_enroll_students">
+    {% for s in students %}
+      <input type="hidden" name="_selected_action" value="{{ s.pk }}">
+    {% endfor %}
+    {% for item in preview_offerings %}
+      <input type="hidden" name="course_offerings" value="{{ item.offering.id }}">
+      {% if item.group_id %}
+        <input type="hidden" name="group_for_{{ item.offering.id }}" value="{{ item.group_id }}">
+      {% endif %}
+    {% endfor %}
+
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; margin-top: 28px;">
+      <button type="submit" name="action_step" value="modify" class="button" style="background: var(--darkened-bg, #f1f5f9); color: var(--body-fg, #334155); border: 1px solid var(--border-color, #cbd5e1); padding: 10px 18px; border-radius: 6px; font-weight: 600;">
+        &larr; {% translate "Modify Selection" %}
+      </button>
+
+      <button type="submit" name="action_step" value="confirm" class="button default" style="padding: 12px 28px; font-weight: 700; font-size: 14px;">
+        ✓ {% translate "Confirm & Execute Enrollments" %}
+      </button>
+    </div>
+  </form>
+
+</div>
+{% endblock %}

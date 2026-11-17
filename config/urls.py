@@ -1,0 +1,26 @@
+from django.contrib import admin
+from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
+
+from apps.accounts.web_views import WebLoginView, WebLogoutView
+from apps.analytics.web_views import (
+    AnalyticsDashboardPage, AnalyticsStudentDetailPage,
+    AnalyticsSessionAttendancePage, StaffChangePasswordWebView,
+)
+from apps.courses.views import get_groups_by_offering
+
+urlpatterns = [
+    path('admin/groups-by-offering/', get_groups_by_offering, name='groups-by-offering'),
+    path('admin/', admin.site.urls),
+    path('login/', WebLoginView.as_view(), name='web-login'),
+    path('logout/', WebLogoutView.as_view(), name='web-logout'),
+    path('analytics/dashboard/', AnalyticsDashboardPage.as_view(), name='analytics-dashboard-web'),
+    path('analytics/change-password/', StaffChangePasswordWebView.as_view(), name='staff-change-password-web'),
+    path('analytics/students/<int:student_id>/', AnalyticsStudentDetailPage.as_view(), name='analytics-student-detail'),
+    path('analytics/sessions/<int:session_id>/', AnalyticsSessionAttendancePage.as_view(), name='analytics-session-attendance-web'),
+    path('api/v1/', include('config.api_urls')),
+]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

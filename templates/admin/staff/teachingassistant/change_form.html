@@ -1,0 +1,106 @@
+{% extends "admin/change_form.html" %}
+{% load i18n %}
+
+{% block object-tools-items %}
+  {{ block.super }}
+  {% if original.pk %}
+    <li>
+      <a href="{% url 'admin:staff_teachingassistant_assign_groups' original.pk %}" class="historylink" style="background: var(--primary, #0284c7); color: white; font-weight: 700; border-radius: 6px; padding: 4px 12px;">
+        ⚡ {% translate "Allocate Existing Groups" %}
+      </a>
+    </li>
+  {% endif %}
+{% endblock %}
+
+{% block footer %}
+  {{ block.super }}
+  <script id="offering-groups-data" type="application/json">{{ offering_groups_json|default:"{}"|safe }}</script>
+
+  <script>
+    (function () {
+      function initInlineGroupFiltering() {
+        var rawData = document.getElementById('offering-groups-data');
+        var offeringGroups = {};
+        if (rawData && rawData.textContent) {
+          try {
+            offeringGroups = JSON.parse(rawData.textContent);
+          } catch (e) {
+            console.error('Failed to parse offering-groups-data:', e);
+          }
+        }
+
+        function setupScheduleRow(container) {
+          var courseSelect = container.querySelector('select[name*="course_offering"]');
+          var groupSelect = container.querySelector('select[name*="group"]');
+
+          if (!courseSelect || !groupSelect) return;
+          if (groupSelect.dataset.filterReady === 'true') return;
+          groupSelect.dataset.filterReady = 'true';
+
+          var initialGroupVal = groupSelect.value;
+
+          function filterGroupsForCourse(courseId, targetVal) {
+            if (!courseId) {
+              groupSelect.innerHTML = '<option value="">{% translate "Select a course offering first..." %}</option>';
+              groupSelect.disabled = true;
+              return;
+            }
+
+            var availableGroups = offeringGroups[String(courseId)] || [];
+            // Preserve the original options if availableGroups is empty or filter based on map
+            groupSelect.innerHTML = '<option value="">---------</option>';
+            var hasMatch = false;
+
+            if (availableGroups.length > 0) {
+              availableGroups.forEach(function (g) {
+                var opt = document.createElement('option');
+                opt.value = g.id;
+                opt.textContent = g.name + (g.assigned_to_ta ? '' : ' ({% translate "Unassigned/Other" %})');
+                if (targetVal && String(g.id) === String(targetVal)) {
+                  opt.selected = true;
+                  hasMatch = true;
+                }
+                groupSelect.appendChild(opt);
+              });
+              groupSelect.disabled = false;
+            } else {
+              // If not found in map, show empty or keep disabled
+              groupSelect.innerHTML = '<option value="">{% translate "No groups for this course" %}</option>';
+              groupSelect.disabled = true;
+            }
+
+            if (!hasMatch && targetVal) {
+              groupSelect.value = '';
+            }
+          }
+
+          // Initial run for existing rows
+          if (courseSelect.value) {
+            filterGroupsForCourse(courseSelect.value, initialGroupVal);
+          } else {
+            groupSelect.disabled = true;
+            groupSelect.innerHTML = '<option value="">{% translate "Select a course offering first..." %}</option>';
+          }
+
+          courseSelect.addEventListener('change', function () {
+            filterGroupsForCourse(this.value, null);
+          });
+        }
+
+        // Initialize on existing schedule rows
+        document.querySelectorAll('tr.form-row, div.inline-related, .tabular tr').forEach(setupScheduleRow);
+
+        // Support dynamically added formset rows
+        document.addEventListener('formset:added', function (event) {
+          if (event.target) setupScheduleRow(event.target);
+        });
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initInlineGroupFiltering);
+      } else {
+        initInlineGroupFiltering();
+      }
+    })();
+  </script>
+{% endblock %}

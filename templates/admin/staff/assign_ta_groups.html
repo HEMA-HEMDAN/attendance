@@ -1,0 +1,281 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+  &rsaquo; <a href="{% url opts|admin_urlname:'changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+  &rsaquo; {% translate 'Allocate Existing Groups to Teaching Assistant' %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div style="max-width: 1080px; margin: 20px auto; padding: 24px; background: var(--darkened-bg, #f8fafc); border: 1px solid var(--border-color, #cbd5e1); border-radius: 12px; color: var(--body-fg, #1e293b);">
+
+  <div style="margin-bottom: 24px; border-bottom: 1px solid var(--border-color, #cbd5e1); padding-bottom: 16px;">
+    <h2 style="margin: 0 0 8px 0; font-size: 22px; font-weight: 700; color: var(--body-fg, #0f172a);">
+      🧑‍🏫 {% translate "Allocate Existing Sections & Groups to Teaching Assistant" %}
+    </h2>
+    <p style="margin: 0; color: var(--body-quiet-color, #64748b); font-size: 14px;">
+      {% translate "Filter by course offering or search to view existing sections, select the ones to allocate to this teaching assistant, and preview before confirming." %}
+    </p>
+  </div>
+
+  <!-- Selected TA Profile Card -->
+  <div style="margin-bottom: 24px; background: var(--body-bg, #ffffff); border: 1px solid var(--border-color, #cbd5e1); border-radius: 8px; padding: 16px;">
+    <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; color: var(--body-quiet-color, #64748b);">
+      {% translate "Target Teaching Assistant" %}:
+    </div>
+    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+      <span style="font-size: 16px; font-weight: 700; color: var(--body-fg, #0f172a);">
+        TA {{ ta.user.get_full_name }}
+      </span>
+      <span style="background: var(--darkened-bg, #f1f5f9); color: var(--body-quiet-color, #475569); border: 1px solid var(--border-color, #e2e8f0); padding: 3px 8px; border-radius: 4px; font-size: 12px;">
+        ✉️ {{ ta.user.email }}
+      </span>
+      {% if ta.department %}
+        <span style="background: var(--darkened-bg, #f1f5f9); color: var(--body-quiet-color, #475569); border: 1px solid var(--border-color, #e2e8f0); padding: 3px 8px; border-radius: 4px; font-size: 12px;">
+          🏢 {{ ta.department }}
+        </span>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Course Selector & Search Controls -->
+  <div style="margin-bottom: 24px; background: var(--body-bg, #ffffff); border: 1px solid var(--border-color, #cbd5e1); border-radius: 8px; padding: 18px;">
+    <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between;">
+      <div style="flex: 1 1 320px;">
+        <label for="course-filter-select" style="display: block; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; color: var(--body-quiet-color, #64748b);">
+          {% translate "Choose Course Offering" %}:
+        </label>
+        <select id="course-filter-select" style="width: 100%; padding: 9px 12px; border: 1px solid var(--border-color, #cbd5e1); border-radius: 6px; background: var(--body-bg, #ffffff); color: var(--body-fg, #1e293b); font-size: 14px; font-weight: 500;">
+          <option value="all">{% translate "-- Show All Course Offerings --" %} ({{ offerings|length }})</option>
+          {% for off in offerings %}
+            <option value="{{ off.id }}">
+              {{ off.course.code }} &mdash; {{ off.course.name }} ({{ off.academic_year.name }} &bull; {{ off.semester.name }}) &bull; [{{ off.groups.all|length }} {% translate "sections" %}]
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div style="flex: 1 1 260px;">
+        <label for="group-search" style="display: block; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; color: var(--body-quiet-color, #64748b);">
+          {% translate "Quick Search" %}:
+        </label>
+        <input type="text" id="group-search" placeholder="{% translate 'Filter by code, course, or group name...' %}" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border-color, #cbd5e1); border-radius: 6px; background: var(--body-bg, #ffffff); color: var(--body-fg, #1e293b); font-size: 13px;">
+      </div>
+    </div>
+  </div>
+
+  <form method="post" id="assign-ta-form">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="assign_groups_to_ta">
+    <input type="hidden" name="_selected_action" value="{{ ta.pk }}">
+
+    <!-- Course Offering Blocks with Existing Groups -->
+    <div id="course-offerings-container">
+      {% for off in offerings %}
+        <div class="course-card" data-offering-id="{{ off.id }}" style="background: var(--body-bg, #ffffff); border: 1px solid var(--border-color, #cbd5e1); border-radius: 8px; margin-bottom: 20px; overflow: hidden;">
+          
+          <!-- Course Header -->
+          <div style="padding: 14px 18px; border-bottom: 1px solid var(--border-color, #cbd5e1); background: var(--darkened-bg, #f8fafc); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <span style="font-weight: 700; font-size: 15px; color: var(--body-fg, #0f172a);">
+                📚 {{ off.course.code }} &mdash; {{ off.course.name }}
+              </span>
+              <span style="color: var(--body-quiet-color, #64748b); font-size: 12px; margin-left: 8px;">
+                ({{ off.academic_year.name }} &bull; {{ off.semester.name }})
+              </span>
+              {% if off.doctor %}
+                <span style="display: inline-block; margin-left: 10px; font-size: 12px; color: var(--body-quiet-color, #475569); background: var(--body-bg, #ffffff); border: 1px solid var(--border-color, #e2e8f0); border-radius: 4px; padding: 2px 8px;">
+                  👨‍🏫 {{ off.doctor.title }} {{ off.doctor.user.get_full_name }}
+                </span>
+              {% endif %}
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <span style="font-size: 12px; font-weight: 600; color: var(--body-quiet-color, #64748b);">
+                {{ off.groups.all|length }} {% translate "sections" %}
+              </span>
+              {% if off.groups.all %}
+                <button type="button" class="toggle-course-groups-btn button" data-offering-id="{{ off.id }}" style="font-size: 11px; padding: 3px 8px; border-radius: 4px;">
+                  {% translate "Toggle All" %}
+                </button>
+              {% endif %}
+            </div>
+          </div>
+
+          <!-- Existing Sections Table -->
+          {% if off.groups.all %}
+            <div style="overflow-x: auto;">
+              <table style="width: 100%; border-collapse: collapse; font-size: 13px; text-align: left;">
+                <thead>
+                  <tr style="background: var(--darkened-bg, #f1f5f9); border-bottom: 1px solid var(--border-color, #e2e8f0); color: var(--body-quiet-color, #475569);">
+                    <th style="width: 44px; padding: 10px 14px; text-align: center;">#</th>
+                    <th style="padding: 10px 14px; font-weight: 700;">{% translate "Existing Group / Section" %}</th>
+                    <th style="padding: 10px 14px; font-weight: 700;">{% translate "Status" %}</th>
+                    <th style="padding: 10px 14px; font-weight: 700;">{% translate "Current Teaching Assistant" %}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for g in off.groups.all %}
+                    <tr style="border-bottom: 1px solid var(--border-color, #f1f5f9);" class="group-row" data-search-text="{{ off.course.code }} {{ off.course.name }} {{ g.name }}">
+                      <td style="padding: 12px 14px; text-align: center; vertical-align: middle;">
+                        <input type="checkbox"
+                               name="groups"
+                               value="{{ g.id }}"
+                               id="group_chk_{{ g.id }}"
+                               class="group-checkbox group-offering-{{ off.id }}"
+                               {% if preselected_group_ids %}{% if g.id in preselected_group_ids %}checked{% endif %}{% else %}{% if g.teaching_assistant_id == ta.id %}checked{% endif %}{% endif %}>
+                      </td>
+                      <td style="padding: 12px 14px; vertical-align: middle;">
+                        <label for="group_chk_{{ g.id }}" style="font-weight: 600; cursor: pointer; color: var(--body-fg, #0f172a); display: block;">
+                          🏷️ {{ g.name }}
+                        </label>
+                      </td>
+                      <td style="padding: 12px 14px; vertical-align: middle;">
+                        <span style="font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 600; {% if g.status == 'ACTIVE' %}background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0;{% else %}background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0;{% endif %}">
+                          {{ g.get_status_display }}
+                        </span>
+                      </td>
+                      <td style="padding: 12px 14px; vertical-align: middle;">
+                        {% if g.teaching_assistant %}
+                          {% if g.teaching_assistant_id == ta.id %}
+                            <span style="background: var(--darkened-bg, #f0fdf4); color: #166534; border: 1px solid #bbf7d0; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">
+                              ✓ {% translate "Already assigned to this TA" %}
+                            </span>
+                          {% else %}
+                            <span style="background: var(--darkened-bg, #fffbeb); color: #92400e; border: 1px solid #fef3c7; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">
+                              ⚠️ TA {{ g.teaching_assistant.user.get_full_name }} ({% translate "will be replaced" %})
+                            </span>
+                          {% endif %}
+                        {% else %}
+                          <span style="background: var(--darkened-bg, #eff6ff); color: #1d4ed8; border: 1px solid #bfdbfe; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">
+                            ✨ {% translate "Unassigned (Ready to allocate)" %}
+                          </span>
+                        {% endif %}
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <div style="padding: 20px; text-align: center; color: var(--body-quiet-color, #64748b); font-size: 13px;">
+              {% translate "No groups or sections have been created for this course offering yet." %}
+            </div>
+          {% endif %}
+        </div>
+      {% empty %}
+        <div style="background: var(--body-bg, #ffffff); border: 1px solid var(--border-color, #cbd5e1); border-radius: 8px; padding: 32px; text-align: center; color: var(--body-quiet-color, #64748b);">
+          {% translate "No active course offerings found for this organization." %}
+        </div>
+      {% endfor %}
+    </div>
+
+    <!-- Sticky Bottom Bar -->
+    <div style="position: sticky; bottom: 12px; z-index: 20; background: var(--body-bg, #ffffff); border: 1px solid var(--border-color, #cbd5e1); border-radius: 8px; padding: 14px 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-top: 24px;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <a href="{% url opts|admin_urlname:'changelist' %}" class="button" style="background: var(--darkened-bg, #f1f5f9); color: var(--body-fg, #334155); border: 1px solid var(--border-color, #cbd5e1); padding: 8px 16px; border-radius: 6px; font-weight: 600; text-decoration: none;">
+          &larr; {% translate "Cancel & Return" %}
+        </a>
+        <span id="selected-groups-counter" style="font-weight: 700; font-size: 13px; color: var(--body-fg, #0f172a);">
+          0 {% translate "groups selected" %}
+        </span>
+      </div>
+
+      <button type="submit" name="action_step" value="preview" class="button default" style="padding: 10px 24px; font-weight: 700; font-size: 14px;">
+        🔍 {% translate "Preview Assignments & Reassignments" %} &rarr;
+      </button>
+    </div>
+  </form>
+
+</div>
+
+<!-- Inline Script (Zero External JS): Course Filter, Live Search & Selection Counter -->
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var courseSelect = document.getElementById('course-filter-select');
+    var searchInput = document.getElementById('group-search');
+    var courseCards = document.querySelectorAll('.course-card');
+    var groupCheckboxes = document.querySelectorAll('.group-checkbox');
+    var counterSpan = document.getElementById('selected-groups-counter');
+    var toggleBtns = document.querySelectorAll('.toggle-course-groups-btn');
+
+    function updateCounter() {
+      var count = 0;
+      groupCheckboxes.forEach(function (cb) {
+        if (cb.checked) count++;
+      });
+      if (counterSpan) {
+        counterSpan.textContent = count + ' {% translate "groups selected" %}';
+      }
+    }
+
+    groupCheckboxes.forEach(function (cb) {
+      cb.addEventListener('change', updateCounter);
+    });
+    updateCounter();
+
+    // Toggle all within a course card
+    toggleBtns.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var offId = this.getAttribute('data-offering-id');
+        var cbs = document.querySelectorAll('.group-offering-' + offId);
+        if (cbs.length > 0) {
+          var allChecked = Array.from(cbs).every(function (cb) { return cb.checked; });
+          cbs.forEach(function (cb) { cb.checked = !allChecked; });
+          updateCounter();
+        }
+      });
+    });
+
+    // Course dropdown filter
+    if (courseSelect) {
+      courseSelect.addEventListener('change', function () {
+        var selectedVal = this.value;
+        courseCards.forEach(function (card) {
+          var offId = card.getAttribute('data-offering-id');
+          if (selectedVal === 'all' || selectedVal === offId) {
+            card.style.display = '';
+          } else {
+            card.style.display = 'none';
+          }
+        });
+      });
+    }
+
+    // Live search filter
+    if (searchInput) {
+      searchInput.addEventListener('input', function () {
+        var query = this.value.trim().toLowerCase();
+        if (!query) {
+          var selectedVal = courseSelect ? courseSelect.value : 'all';
+          courseCards.forEach(function (card) {
+            var offId = card.getAttribute('data-offering-id');
+            card.style.display = (selectedVal === 'all' || selectedVal === offId) ? '' : 'none';
+            card.querySelectorAll('.group-row').forEach(function (row) { row.style.display = ''; });
+          });
+          return;
+        }
+
+        courseCards.forEach(function (card) {
+          var hasMatchInCard = false;
+          var rows = card.querySelectorAll('.group-row');
+          rows.forEach(function (row) {
+            var searchText = (row.getAttribute('data-search-text') || '').toLowerCase();
+            if (searchText.indexOf(query) !== -1) {
+              row.style.display = '';
+              hasMatchInCard = true;
+            } else {
+              row.style.display = 'none';
+            }
+          });
+          card.style.display = hasMatchInCard ? '' : 'none';
+        });
+      });
+    }
+  });
+</script>
+{% endblock %}

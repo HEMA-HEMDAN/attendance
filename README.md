@@ -29,7 +29,7 @@ See `.env.example` for all required variables.
 ```bash
 pytest
 ```
-
+dd
 ## Local Docker Testing
 
 To test the application locally using Docker (with Nginx), make sure you copy `.env.prod.example` to `.env.prod` and configure it to point to your local database, then run:

@@ -72,7 +72,7 @@ Alternatively, you can run a single command without entering the shell:
 docker exec -it attendance_web python manage.py createsuperuser
 ```
 
-
+oo
 
 
 

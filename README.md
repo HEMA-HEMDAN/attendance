@@ -65,7 +65,7 @@ python manage.py createsuperuser
 ```bash
 exit
 ```
-
+cb
 Alternatively, you can run a single command without entering the shell:
 
 ```bash

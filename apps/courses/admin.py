@@ -19,6 +19,12 @@ class AcademicYearAdmin(TenantScopedImportExportAdmin):
     search_fields = ['name']
     autocomplete_fields = ['organization']
 
+    def get_exclude(self, request, obj=None):
+        exclude = list(super().get_exclude(request, obj) or [])
+        if not request.user.is_superuser:
+            exclude.append('organization')
+        return exclude
+
 
 @admin.register(Semester)
 class SemesterAdmin(TenantScopedImportExportAdmin):

@@ -5,6 +5,7 @@ from django.urls import reverse
 
 from apps.accounts.admin_permissions import configure_organization_admin
 from apps.accounts.models import Role
+from apps.courses.models import AcademicYear
 from tests.factories import (
     AdminUserFactory,
     CourseFactory,
@@ -60,6 +61,26 @@ class TestDjangoAdminPermissions:
         assert other_course.name.encode() not in response.content
 
         assert admin_client.get(f'/admin/courses/course/{other_course.pk}/change/').status_code in (302, 404)
+
+    def test_organization_admin_academic_year_uses_own_organization(self, admin_client):
+        organization = OrganizationFactory(slug='academic-year-admin-org')
+        admin = AdminUserFactory(organization=organization)
+        configure_organization_admin(admin)
+        assert admin_client.login(email=admin.email, password='testpass123')
+
+        response = admin_client.get('/admin/courses/academicyear/add/')
+        assert response.status_code == 200
+        assert 'organization' not in response.context['adminform'].form.fields
+
+        response = admin_client.post('/admin/courses/academicyear/add/', {
+            'name': '2026/2027',
+            'start_date': '2026-09-01',
+            'end_date': '2027-06-30',
+            'is_active': 'on',
+        })
+        assert response.status_code == 302
+        academic_year = AcademicYear.objects.get(name='2026/2027')
+        assert academic_year.organization == organization
 
     def test_organization_admin_cannot_access_platform_resources(self, admin_client):
         organization = OrganizationFactory()

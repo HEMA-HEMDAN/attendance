@@ -14,6 +14,7 @@ pip install -r requirements/dev.txt
 cp .env.example .env
 # Edit .env with your database credentials
 python manage.py migrate
+python manage.py makemigrations
 python manage.py createsuperuser
 
 

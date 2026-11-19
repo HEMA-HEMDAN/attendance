@@ -7,7 +7,7 @@ Django backend for the Bio Attendance system.
 i may need to make a script to automate this
 
 ```bash
-cd server
+cd attendance
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements/dev.txt

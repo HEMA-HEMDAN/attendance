@@ -11,7 +11,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 env = environ.Env(
     DEBUG=(bool, False),
-    ALLOWED_HOSTS=(list, ['localhost', '127.0.0.1']),
+    ALLOWED_HOSTS=(list, ['localhost', '127.0.0.1','0.0.0.0']),
     CORS_ALLOWED_ORIGINS=(list, ['http://localhost:3000', 'http://localhost:5173']),
     JWT_ACCESS_TOKEN_LIFETIME_MINUTES=(int, 60),
     JWT_REFRESH_TOKEN_LIFETIME_DAYS=(int, 7),

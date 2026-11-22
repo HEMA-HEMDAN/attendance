@@ -113,11 +113,15 @@ jobs:
             CORS_ALLOWED_ORIGINS=https://horus.social,https://www.horus.social,https://fci.elmanasah.app
             EOF
 
-            # Public GHCR package: no Docker login required.
+            # Remove stale registry credentials.
+            docker logout ghcr.io || true
+
+            # Pull public images anonymously.
             docker compose \
               --env-file .env.prod \
               -f docker-compose.prod.yml pull
 
+            # Start application.
             docker compose \
               --env-file .env.prod \
               -f docker-compose.prod.yml up -d
@@ -125,10 +129,16 @@ jobs:
             echo "Waiting for application..."
             sleep 10
 
+            # Apply database migrations.
             docker exec attendance_web \
               python manage.py migrate --noinput
 
+            # Verify running containers.
+            docker compose \
+              --env-file .env.prod \
+              -f docker-compose.prod.yml ps
+
+            # Clean unused images.
             docker image prune -f
 
             echo "Deployment completed successfully."
-

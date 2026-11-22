@@ -5,8 +5,9 @@ from django.urls import reverse
 
 from apps.accounts.admin_permissions import configure_organization_admin
 from apps.accounts.models import Role
-from apps.courses.models import AcademicYear
+from apps.courses.models import AcademicYear, Semester
 from tests.factories import (
+    AcademicYearFactory,
     AdminUserFactory,
     CourseFactory,
     DoctorUserFactory,
@@ -81,6 +82,40 @@ class TestDjangoAdminPermissions:
         assert response.status_code == 302
         academic_year = AcademicYear.objects.get(name='2026/2027')
         assert academic_year.organization == organization
+
+    def test_organization_admin_semester_uses_own_organization(self, admin_client):
+        organization = OrganizationFactory(slug='semester-admin-org')
+        other_organization = OrganizationFactory(slug='other-semester-org')
+        academic_year = AcademicYearFactory(
+            organization=organization,
+            name='2026/2027',
+        )
+        other_academic_year = AcademicYearFactory(
+            organization=other_organization,
+            name='2026/2027',
+        )
+        admin = AdminUserFactory(organization=organization)
+        configure_organization_admin(admin)
+        assert admin_client.login(email=admin.email, password='testpass123')
+
+        response = admin_client.get('/admin/courses/semester/add/')
+        assert response.status_code == 200
+        assert 'organization' not in response.context['adminform'].form.fields
+        academic_year_field = response.context['adminform'].form.fields['academic_year']
+        assert list(academic_year_field.queryset) == [academic_year]
+
+        response = admin_client.post('/admin/courses/semester/add/', {
+            'academic_year': academic_year.pk,
+            'name': 'Fall',
+            'start_date': '2026-09-01',
+            'end_date': '2026-12-31',
+            'is_active': 'on',
+        })
+        assert response.status_code == 302
+        semester = Semester.objects.get(name='Fall', academic_year=academic_year)
+        assert semester.organization == organization
+
+        assert academic_year_field.queryset.filter(pk=other_academic_year.pk).count() == 0
 
     def test_organization_admin_cannot_access_platform_resources(self, admin_client):
         organization = OrganizationFactory()

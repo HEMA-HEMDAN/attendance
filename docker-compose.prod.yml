@@ -13,7 +13,7 @@ services:
       - attendance_net
 
   web:
-    image: ghcr.io/hema-hemdan/attendance_web:latest
+    image: ghcr.io/${REPO_OWNER}/attendance_web:latest
     container_name: attendance_web
     restart: always
     env_file:
@@ -32,7 +32,7 @@ services:
       - attendance_net
 
   session_worker:
-    image: ghcr.io/hema-hemdan/attendance_web:latest
+    image: ghcr.io/${REPO_OWNER}/attendance_web:latest
     container_name: attendance_session_worker
     restart: always
     command: python manage.py listen_session_expirations

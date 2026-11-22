@@ -10,6 +10,7 @@ from django import forms
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import Group
+from django.core.exceptions import FieldDoesNotExist
 from import_export.admin import ImportExportModelAdmin
 from import_export.forms import ImportForm, ConfirmImportForm
 
@@ -34,6 +35,18 @@ class OrgScopedAdminMixin:
 
     def get_queryset(self, request):
         return self._organization_queryset(request)
+
+    def get_exclude(self, request, obj=None):
+        exclude = list(super().get_exclude(request, obj) or [])
+        if not request.user.is_superuser:
+            try:
+                self.model._meta.get_field('organization')
+            except FieldDoesNotExist:
+                pass
+            else:
+                if 'organization' not in exclude:
+                    exclude.append('organization')
+        return exclude
 
     def save_model(self, request, obj, form, change):
         if not request.user.is_superuser and not change:

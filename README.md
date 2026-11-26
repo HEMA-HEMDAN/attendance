@@ -4,7 +4,15 @@ Django backend for the Bio Attendance system.
 
 ## Quick Start
 
-i may need to make a script to automate this
+The easiest way to set up a local development environment is the setup script (requires Python 3.10+, PostgreSQL and Redis running locally):
+
+```bash
+bash scripts/setup_local.sh
+```
+
+It creates a virtualenv, installs the dev requirements, prepares your `.env`, runs the migrations and offers to create a superuser.
+
+Or run the same steps manually:
 
 ```bash
 cd attendance
@@ -13,10 +21,9 @@ source venv/bin/activate
 pip install -r requirements/dev.txt
 cp .env.example .env
 # Edit .env with your database credentials
-python manage.py migrate
 python manage.py makemigrations
+python manage.py migrate
 python manage.py createsuperuser
-
 
 python manage.py runserver 0.0.0.0:8000
 ```
@@ -66,13 +73,13 @@ python manage.py createsuperuser
 ```bash
 exit
 ```
-cb
+
 Alternatively, you can run a single command without entering the shell:
 
 ```bash
 docker exec -it attendance_web python manage.py createsuperuser
 ```
-ffzxccv
 
+## TODO
 
-i need to think about a backup stratigy this one is very important
+- Set up a backup strategy for the database (important).

@@ -4,8 +4,6 @@ Django backend for the Bio Attendance system.
 
 ## Quick Start
 
-i may need to make a script to automate this
-
 ```bash
 cd attendance
 python3 -m venv venv
@@ -13,8 +11,8 @@ source venv/bin/activate
 pip install -r requirements/dev.txt
 cp .env.example .env
 # Edit .env with your database credentials
-python manage.py migrate
 python manage.py makemigrations
+python manage.py migrate
 python manage.py createsuperuser
 
 
@@ -66,13 +64,17 @@ python manage.py createsuperuser
 ```bash
 exit
 ```
-cb
+
 Alternatively, you can run a single command without entering the shell:
 
 ```bash
 docker exec -it attendance_web python manage.py createsuperuser
 ```
-ffzxccv
 
 
-i need to think about a backup stratigy this one is very important
+
+
+## TODO
+
+- [ ] Create a setup automation script for local installation.
+- [ ] Define and implement a database backup strategy.

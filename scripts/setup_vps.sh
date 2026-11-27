@@ -24,8 +24,9 @@ sudo apt-get update
 echo "Installing Docker and Docker Compose..."
 sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-echo "Granting 'ubuntu' user permission to run Docker..."
-sudo usermod -aG docker ubuntu
+TARGET_USER="${SUDO_USER:-$USER}"
+echo "Granting '$TARGET_USER' user permission to run Docker..."
+sudo usermod -aG docker "$TARGET_USER"
 
 echo "======================================"
 echo " Docker Setup Complete!"

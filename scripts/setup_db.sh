@@ -25,7 +25,10 @@ sudo apt install postgresql postgresql-contrib redis-server -y
 echo "Configuring PostgreSQL Database and User..."
 # Run postgres commands as the postgres user
 sudo -u postgres psql -c "CREATE DATABASE attendance;" || echo "Database 'attendance' might already exist."
-sudo -u postgres psql -c "CREATE USER attendance_user WITH PASSWORD '$DB_PASSWORD';" || echo "User 'attendance_user' might already exist."
+
+sudo -u postgres psql -v password="$DB_PASSWORD" -c "CREATE USER attendance_user WITH PASSWORD :'password';" || echo "User 'attendance_user' might already exist."
+# password may have ' in it
+
 sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE attendance TO attendance_user;"
 sudo -u postgres psql -d attendance -c "GRANT ALL ON SCHEMA public TO attendance_user;"
 
@@ -35,17 +38,16 @@ if [ -n "$PG_VER" ]; then
     echo "Configuring PostgreSQL network access..."
     sudo sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/" /etc/postgresql/$PG_VER/main/postgresql.conf
     sudo sed -i "s/listen_addresses = 'localhost'/listen_addresses = '*'/" /etc/postgresql/$PG_VER/main/postgresql.conf
-    if ! grep -q "0.0.0.0/0" /etc/postgresql/$PG_VER/main/pg_hba.conf; then
-        echo "host    all             all             0.0.0.0/0               scram-sha-256" | sudo tee -a /etc/postgresql/$PG_VER/main/pg_hba.conf
-        echo "host    all             all             0.0.0.0/0               md5" | sudo tee -a /etc/postgresql/$PG_VER/main/pg_hba.conf
+    if ! grep -q "172.16.0.0/12" /etc/postgresql/$PG_VER/main/pg_hba.conf; then
+        echo "host    all             all             172.16.0.0/12           scram-sha-256" | sudo tee -a /etc/postgresql/$PG_VER/main/pg_hba.conf
     fi
     sudo systemctl restart postgresql
 fi
 
-# Configure Redis to accept connections from Docker containers
+# Configure Redis to accept connections from localhost and Docker bridge network only
 echo "Configuring Redis network access..."
-sudo sed -i 's/^bind 127.0.0.1.*/bind 0.0.0.0/' /etc/redis/redis.conf
-sudo sed -i 's/^protected-mode yes/protected-mode no/' /etc/redis/redis.conf
+DOCKER_BRIDGE_IP=$(ip -4 addr show docker0 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' || echo "172.17.0.1")
+sudo sed -i "s/^bind 127.0.0.1.*/bind 127.0.0.1 $DOCKER_BRIDGE_IP/" /etc/redis/redis.conf
 sudo systemctl restart redis-server
 
 echo "======================================"

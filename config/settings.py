@@ -11,7 +11,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 env = environ.Env(
     DEBUG=(bool, False),
-    ALLOWED_HOSTS=(list, ['localhost', '127.0.0.1','0.0.0.0']),
+    ALLOWED_HOSTS=(list, ['localhost', '127.0.0.1']),
     CORS_ALLOWED_ORIGINS=(list, ['http://localhost:3000', 'http://localhost:5173']),
     JWT_ACCESS_TOKEN_LIFETIME_MINUTES=(int, 60),
     JWT_REFRESH_TOKEN_LIFETIME_DAYS=(int, 7),
@@ -153,12 +153,19 @@ SIMPLE_JWT = {
 }
 
 # CORS & Security
-CORS_ALLOW_ALL_ORIGINS = env.bool('CORS_ALLOW_ALL_ORIGINS', default=DEBUG)
+CORS_ALLOW_ALL_ORIGINS = env.bool('CORS_ALLOW_ALL_ORIGINS', default=False)
 CORS_ALLOWED_ORIGINS = env('CORS_ALLOWED_ORIGINS')
 CORS_ALLOW_CREDENTIALS = True
+# CSRF??
 
-CSRF_TRUSTED_ORIGINS = env('CORS_ALLOWED_ORIGINS')
+CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=CORS_ALLOWED_ORIGINS)
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+if not DEBUG:
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+
 
 # Static / Media
 STATIC_URL = '/static/'
